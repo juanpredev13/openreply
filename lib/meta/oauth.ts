@@ -212,7 +212,13 @@ export async function exchangeUnifiedCode(
   pagesUrl.searchParams.set("access_token", long.access_token);
   const pages = await readGraph<{ data?: FacebookPage[] }>(pagesUrl);
 
-  const list = pages.data ?? [];
+  const list = [...(pages.data ?? [])];
+  // Pages owned by a business portfolio are not always in /me/accounts for a
+  // Login for Business token, but they are reachable through the business.
+  const businesses = await readBusinessPages(base, long.access_token);
+  for (const page of businesses.pages) {
+    if (!list.some((p) => p.id === page.id)) list.push(page);
+  }
   for (const candidate of list) {
     if (!candidate.access_token) continue;
     const ig =
@@ -236,8 +242,54 @@ export async function exchangeUnifiedCode(
     ? list.map((p) => `${p.name ?? p.id}${p.access_token ? "" : " (no token)"}`).join(", ")
     : "none";
   throw new Error(
-    `No Facebook Page with a linked Instagram professional account was shared during login. Pages: ${pageSummary}. Permissions: ${granted}`
+    `No Facebook Page with a linked Instagram professional account was shared during login. Pages: ${pageSummary}. Businesses: ${businesses.summary}. Permissions: ${granted}`
   );
+}
+
+async function readBusinessPages(
+  base: string,
+  userToken: string
+): Promise<{ pages: FacebookPage[]; summary: string }> {
+  const pageFields =
+    "id,name,access_token,instagram_business_account{id,username,name}";
+  const url = new URL(`${base}/me/businesses`);
+  url.searchParams.set(
+    "fields",
+    `id,name,owned_pages{${pageFields}},client_pages{${pageFields}},owned_instagram_accounts{id,username}`
+  );
+  url.searchParams.set("access_token", userToken);
+  try {
+    const data = await readGraph<{
+      data?: Array<{
+        id: string;
+        name?: string;
+        owned_pages?: { data?: FacebookPage[] };
+        client_pages?: { data?: FacebookPage[] };
+        owned_instagram_accounts?: { data?: Array<{ id: string; username?: string }> };
+      }>;
+    }>(url);
+    const rows = data.data ?? [];
+    const pages = rows.flatMap((b) => [
+      ...(b.owned_pages?.data ?? []),
+      ...(b.client_pages?.data ?? []),
+    ]);
+    const summary = rows.length
+      ? rows
+          .map((b) => {
+            const igs = (b.owned_instagram_accounts?.data ?? [])
+              .map((ig) => ig.username ?? ig.id)
+              .join("/");
+            const count =
+              (b.owned_pages?.data?.length ?? 0) + (b.client_pages?.data?.length ?? 0);
+            return `${b.name ?? b.id} (${count} pages${igs ? `, IG ${igs}` : ""})`;
+          })
+          .join(", ")
+      : "none";
+    return { pages, summary };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.slice(0, 80) : "error";
+    return { pages: [], summary: `unreadable: ${reason}` };
+  }
 }
 
 type LinkedInstagram = { id: string; username?: string; name?: string };

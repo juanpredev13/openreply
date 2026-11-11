@@ -92,7 +92,8 @@ describe("Unified Login mode", () => {
             },
           ],
         })
-      );
+      )
+      .mockResolvedValueOnce(json({ data: [] }));
 
     const result = await exchangeUnifiedCode("code", "https://x.test/cb");
     expect(result).toMatchObject({
@@ -113,13 +114,41 @@ describe("Unified Login mode", () => {
       .mockResolvedValueOnce(json({ access_token: "short" }))
       .mockResolvedValueOnce(json({ access_token: "long" }))
       .mockResolvedValueOnce(json({ data: [{ id: "p0", name: "Mi Página", access_token: "pt0" }] }))
+      .mockResolvedValueOnce(json({ data: [{ id: "b1", name: "Juanpredev" }] }))
       .mockResolvedValueOnce(json({ id: "p0" }))
       .mockResolvedValueOnce(
         json({ data: [{ permission: "pages_show_list", status: "granted" }] })
       );
     await expect(exchangeUnifiedCode("code", "https://x.test/cb")).rejects.toThrow(
-      /No Facebook Page.*Pages: Mi Página.*Permissions: pages_show_list/
+      /Pages: Mi Página.*Businesses: Juanpredev \(0 pages\).*Permissions: pages_show_list/
     );
+  });
+
+  it("finds Pages owned by a business portfolio", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ access_token: "short" }))
+      .mockResolvedValueOnce(json({ access_token: "long" }))
+      .mockResolvedValueOnce(json({ data: [] }))
+      .mockResolvedValueOnce(
+        json({
+          data: [
+            {
+              id: "b1",
+              owned_pages: {
+                data: [
+                  {
+                    id: "p7",
+                    access_token: "pt7",
+                    instagram_business_account: { id: "ig_7", username: "juan" },
+                  },
+                ],
+              },
+            },
+          ],
+        })
+      );
+    const result = await exchangeUnifiedCode("code", "https://x.test/cb");
+    expect(result).toMatchObject({ instagramId: "ig_7", accessToken: "pt7", pageId: "p7" });
   });
 
   it("falls back to reading the Page with its own token", async () => {
@@ -127,6 +156,7 @@ describe("Unified Login mode", () => {
       .mockResolvedValueOnce(json({ access_token: "short" }))
       .mockResolvedValueOnce(json({ access_token: "long" }))
       .mockResolvedValueOnce(json({ data: [{ id: "p0", access_token: "pt0" }] }))
+      .mockResolvedValueOnce(json({ data: [] }))
       .mockResolvedValueOnce(
         json({ id: "p0", connected_instagram_account: { id: "ig_5", username: "juan" } })
       );
