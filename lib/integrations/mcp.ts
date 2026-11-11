@@ -7,6 +7,7 @@ import {
   listPosts,
   setCampaignActive,
 } from "./campaign-writes";
+import { publishPostFromKey, publishPostInputSchema } from "./post-writes";
 import { requireScope, type ServiceContext } from "./auth";
 import { ApiError } from "./http";
 
@@ -24,6 +25,11 @@ const writeTools = [
   { name: "create_campaign", description: "Create a comment-to-DM campaign. It is created paused unless isActive is true. Confirm the post, keywords and DM text with the user before activating.", inputSchema: createCampaignInputSchema, readOnly: false },
   { name: "set_campaign_active", description: "Activate or pause a campaign. An active campaign sends DMs to people who comment the keywords.", inputSchema: { type: "object", properties: { id: { type: "string", minLength: 1, maxLength: 100 }, isActive: { type: "boolean" } }, required: ["id", "isActive"], additionalProperties: false }, readOnly: false },
 ];
+// Publishing makes content public on Instagram and cannot be undone through
+// this API, so it needs its own posts:publish scope.
+const publishTools = [
+  { name: "publish_post", description: "Publish a photo, reel or carousel to Instagram from public HTTPS media URLs, optionally with a paused comment-to-DM campaign attached. The post is public immediately and cannot be deleted through this API: confirm the media, caption and account with the user first.", inputSchema: publishPostInputSchema },
+];
 
 export function listTools(context: ServiceContext) {
   const tools = [];
@@ -33,10 +39,17 @@ export function listTools(context: ServiceContext) {
   if (context.scopes.includes("campaigns:write")) {
     tools.push(...writeTools.map(({ readOnly, ...tool }) => ({ ...tool, annotations: { readOnlyHint: readOnly, destructiveHint: false, idempotentHint: readOnly || tool.name === "set_campaign_active", openWorldHint: !readOnly } })));
   }
+  if (context.scopes.includes("posts:publish")) {
+    tools.push(...publishTools.map(tool => ({ ...tool, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } })));
+  }
   return tools;
 }
 
 export async function callTool(context: ServiceContext, name: string, args: unknown) {
+  if (name === "publish_post") {
+    requireScope(context, "posts:publish");
+    return publishPostFromKey(context, args);
+  }
   if (writeTools.some(tool => tool.name === name)) {
     requireScope(context, "campaigns:write");
     if (name === "list_instagram_accounts") {
@@ -59,6 +72,9 @@ export async function callTool(context: ServiceContext, name: string, args: unkn
 }
 
 export function serverInstructions(context: ServiceContext) {
+  if (context.scopes.includes("posts:publish")) {
+    return "Workspace-scoped. This key can publish Instagram posts and create, activate and pause campaigns; it cannot send messages directly or delete anything. Published posts are public at once, so confirm them with the user first. New campaigns start paused.";
+  }
   return context.scopes.includes("campaigns:write")
     ? "Workspace-scoped. This key can create, activate and pause campaigns; it cannot send messages directly or delete anything. New campaigns start paused."
     : "Read-only and workspace-scoped. No tool can modify campaigns or send messages.";

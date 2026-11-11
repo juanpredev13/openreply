@@ -944,3 +944,114 @@ export async function debugToken(inputToken: string, accessToken: string) {
   const response = await fetch(url.toString());
   return handleResponse(response);
 }
+
+// ---------------------------------------------------------------------------
+// Content publishing. Needs `instagram_content_publish` (Unified Login) or
+// `instagram_business_content_publish` (Instagram Login). Meta downloads the
+// media from a public HTTPS URL; images must be JPEG, videos MP4.
+// ---------------------------------------------------------------------------
+
+export type PublishMediaItem = { type: "IMAGE" | "VIDEO"; url: string };
+
+type ContainerStatus = "EXPIRED" | "ERROR" | "FINISHED" | "IN_PROGRESS" | "PUBLISHED";
+
+async function graphPost<T>(path: string, params: Record<string, string>, accessToken: string): Promise<T> {
+  const body = new URLSearchParams({ ...params, access_token: accessToken });
+  const response = await fetch(`${graphBase()}/${path}`, { method: "POST", body });
+  return handleResponse<T>(response);
+}
+
+async function createContainer(
+  accessToken: string,
+  owner: string,
+  params: Record<string, string>
+): Promise<string> {
+  const data = await graphPost<{ id: string }>(`${owner}/media`, params, accessToken);
+  return data.id;
+}
+
+async function waitForContainer(
+  accessToken: string,
+  containerId: string,
+  { timeoutMs = 120_000, intervalMs = 3_000 }: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const url = new URL(`${graphBase()}/${containerId}`);
+    url.searchParams.set("fields", "status_code,status");
+    url.searchParams.set("access_token", accessToken);
+    const data = await handleResponse<{ status_code?: ContainerStatus; status?: string }>(
+      await fetch(url.toString())
+    );
+    if (data.status_code === "FINISHED" || data.status_code === "PUBLISHED") return;
+    if (data.status_code === "ERROR" || data.status_code === "EXPIRED") {
+      throw new MetaApiError(0, undefined, undefined, `Instagram could not process the media: ${data.status ?? data.status_code}`);
+    }
+    if (Date.now() + intervalMs > deadline) {
+      throw new MetaApiError(0, undefined, undefined, `Instagram is still processing the media (container ${containerId}); try again later`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * Publish a feed post: one image, one video (published as a reel) or a
+ * carousel of 2–10 items. Returns the new media id and permalink.
+ */
+export async function publishMedia(
+  accessToken: string,
+  { items, caption, shareReelToFeed = true }: { items: PublishMediaItem[]; caption: string; shareReelToFeed?: boolean },
+  options?: { pollIntervalMs?: number; timeoutMs?: number }
+): Promise<{ id: string; permalink: string | null }> {
+  if (items.length < 1 || items.length > 10) throw new Error("A post needs 1 to 10 media items");
+  const owner = await resolveSelfNode(accessToken);
+  const wait = (id: string) =>
+    waitForContainer(accessToken, id, { intervalMs: options?.pollIntervalMs, timeoutMs: options?.timeoutMs });
+
+  let containerId: string;
+  if (items.length === 1) {
+    const [item] = items;
+    containerId = await createContainer(
+      accessToken,
+      owner,
+      item.type === "IMAGE"
+        ? { image_url: item.url, caption }
+        : { media_type: "REELS", video_url: item.url, caption, share_to_feed: String(shareReelToFeed) }
+    );
+  } else {
+    const children: string[] = [];
+    for (const item of items) {
+      children.push(
+        await createContainer(
+          accessToken,
+          owner,
+          item.type === "IMAGE"
+            ? { image_url: item.url, is_carousel_item: "true" }
+            : { media_type: "VIDEO", video_url: item.url, is_carousel_item: "true" }
+        )
+      );
+    }
+    for (const child of children) await wait(child);
+    containerId = await createContainer(accessToken, owner, {
+      media_type: "CAROUSEL",
+      children: children.join(","),
+      caption,
+    });
+  }
+  await wait(containerId);
+
+  const published = await graphPost<{ id: string }>(
+    `${owner}/media_publish`,
+    { creation_id: containerId },
+    accessToken
+  );
+
+  let permalink: string | null = null;
+  try {
+    const url = new URL(`${graphBase()}/${published.id}`);
+    url.searchParams.set("fields", "permalink");
+    url.searchParams.set("access_token", accessToken);
+    permalink = (await handleResponse<{ permalink?: string }>(await fetch(url.toString()))).permalink ?? null;
+  } catch {}
+  return { id: published.id, permalink };
+}

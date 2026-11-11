@@ -23,6 +23,9 @@ export async function POST(request: Request) {
     if (!input.success) throw new ApiError("Invalid key configuration");
     // A write key can always read what it creates.
     const scopes = new Set(input.data.scopes);
+    // Publishing implies campaign writes (publish_post can attach a campaign),
+    // and writes imply reads.
+    if (scopes.has("posts:publish")) scopes.add("campaigns:write");
     if (scopes.has("campaigns:write")) scopes.add("campaigns:read");
     const token = newServiceToken();
     const key = await prisma.serviceKey.create({ data: { name: input.data.name, scopes: [...scopes],

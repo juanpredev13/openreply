@@ -11,6 +11,7 @@ export default function IntegrationsPage() {
   const [name, setName] = useState("");
   const [days, setDays] = useState(30);
   const [canWrite, setCanWrite] = useState(false);
+  const [canPublish, setCanPublish] = useState(false);
   const [token, setToken] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,7 +26,9 @@ export default function IntegrationsPage() {
   useEffect(() => { void Promise.resolve().then(load).catch(e => setNotice(e.message)); }, []);
 
   async function create() {
-    const question = canWrite
+    const question = canPublish
+      ? t("Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.", { days })
+      : canWrite
       ? t("Create a workspace key for {days} days that can create and activate campaigns? Anyone with this key can start campaigns that send DMs.", { days })
       : t("Create a read-only workspace key for {days} days? Anyone with this key can read your campaigns.", { days });
     if (!window.confirm(question)) return;
@@ -33,7 +36,7 @@ export default function IntegrationsPage() {
     try {
       const response = await fetch("/api/integrations/keys", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, days, scopes: canWrite ? ["campaigns:read", "campaigns:write"] : ["campaigns:read"] }),
+        body: JSON.stringify({ name, days, scopes: canPublish ? ["campaigns:read", "campaigns:write", "posts:publish"] : canWrite ? ["campaigns:read", "campaigns:write"] : ["campaigns:read"] }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -65,7 +68,8 @@ export default function IntegrationsPage() {
         {[30, 60, 90].map(value => <option key={value} value={value}>{t("{days} days", { days: value })}</option>)}
       </select></label>
       <p className="text-sm text-muted">{t("Applies only to new keys. Existing expiration dates do not change.")}</p>
-      <label className="flex items-center gap-2"><input type="checkbox" disabled={busy} checked={canWrite} onChange={e => setCanWrite(e.target.checked)} />{t("Allow creating and activating campaigns")}</label>
+      <label className="flex items-center gap-2"><input type="checkbox" disabled={busy} checked={canWrite} onChange={e => { setCanWrite(e.target.checked); if (!e.target.checked) setCanPublish(false); }} />{t("Allow creating and activating campaigns")}</label>
+      <label className="flex items-center gap-2"><input type="checkbox" disabled={busy || !canWrite} checked={canPublish} onChange={e => setCanPublish(e.target.checked)} />{t("Allow publishing posts to Instagram")}</label>
       <button disabled={busy || !name.trim()} onClick={create} className="rounded bg-accent px-4 py-2 text-white disabled:opacity-50">{t("Create key for {days} days", { days })}</button>
       {token && <div role="status" className="space-y-2">
         <p>{t("Shown once. Store securely; never put keys in URLs, screenshots or GitHub.")}</p>
