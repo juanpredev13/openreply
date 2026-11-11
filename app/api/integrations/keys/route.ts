@@ -18,11 +18,14 @@ export async function POST(request: Request) {
     checkOrigin(request);
     const context = await getCurrentWorkspaceContext();
     if (!context || !canManageWorkspace(context.role)) throw new ApiError("Admin role required", 403);
-    const input = z.object({ name: z.string().trim().min(1).max(100), scopes: z.array(z.enum(SERVICE_SCOPES)).min(1).max(1),
+    const input = z.object({ name: z.string().trim().min(1).max(100), scopes: z.array(z.enum(SERVICE_SCOPES)).min(1).max(SERVICE_SCOPES.length),
       days: z.number().int().min(1).max(90).default(30) }).strict().safeParse(await readJson(request));
     if (!input.success) throw new ApiError("Invalid key configuration");
+    // A write key can always read what it creates.
+    const scopes = new Set(input.data.scopes);
+    if (scopes.has("campaigns:write")) scopes.add("campaigns:read");
     const token = newServiceToken();
-    const key = await prisma.serviceKey.create({ data: { name: input.data.name, scopes: [...new Set(input.data.scopes)],
+    const key = await prisma.serviceKey.create({ data: { name: input.data.name, scopes: [...scopes],
       workspaceId: context.workspaceId, tokenHash: hashServiceToken(token), expiresAt: new Date(Date.now() + input.data.days * 86400000) }, select: safeFields });
     return Response.json({ key, token }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }

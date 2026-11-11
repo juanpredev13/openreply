@@ -468,5 +468,8 @@
   "{name} Campaign Report": "Relatório da campanha {name}",
   "{type} post": "Publicação {type}",
   "”": "”",
-  "← Campaigns": "← Campanhas"
+  "← Campaigns": "← Campanhas",
+  "Allow creating and activating campaigns": "Permitir criar e ativar campanhas",
+  "Create a workspace key for {days} days that can create and activate campaigns? Anyone with this key can start campaigns that send DMs.": "Criar uma chave do espaço de trabalho por {days} dias que pode criar e ativar campanhas? Qualquer pessoa com esta chave poderá iniciar campanhas que enviam DMs.",
+  "Workspace-scoped keys. Read keys only read campaigns; write keys can also create, activate and pause them. No key can send messages directly or delete anything. Only admins and owners can manage keys.": "Chaves restritas ao espaço de trabalho. Chaves de leitura apenas leem campanhas; chaves de escrita também podem criá-las, ativá-las e pausá-las. Nenhuma chave pode enviar mensagens diretamente nem excluir nada. Somente administradores e proprietários podem gerenciar chaves."
 }
