@@ -212,23 +212,73 @@ export async function exchangeUnifiedCode(
   pagesUrl.searchParams.set("access_token", long.access_token);
   const pages = await readGraph<{ data?: FacebookPage[] }>(pagesUrl);
 
-  const page = pages.data?.find(
-    (p) => p.instagram_business_account?.id && p.access_token
-  );
-  if (!page?.instagram_business_account || !page.access_token) {
-    throw new Error(
-      "No Facebook Page with a linked Instagram professional account was shared during login"
-    );
+  const list = pages.data ?? [];
+  for (const candidate of list) {
+    if (!candidate.access_token) continue;
+    const ig =
+      candidate.instagram_business_account ??
+      (await readLinkedInstagram(base, candidate.id, candidate.access_token));
+    if (ig?.id) {
+      return {
+        accessToken: candidate.access_token,
+        instagramId: ig.id,
+        username: ig.username ?? "",
+        name: ig.name,
+        pageId: candidate.id,
+      };
+    }
   }
 
-  const ig = page.instagram_business_account;
-  return {
-    accessToken: page.access_token,
-    instagramId: ig.id,
-    username: ig.username ?? "",
-    name: ig.name,
-    pageId: page.id,
-  };
+  // Say what Meta actually returned, so a failed connect can be told apart:
+  // no Page shared in the dialog vs. Pages without a linked Instagram account.
+  const granted = await readGrantedPermissions(base, long.access_token);
+  const pageSummary = list.length
+    ? list.map((p) => `${p.name ?? p.id}${p.access_token ? "" : " (no token)"}`).join(", ")
+    : "none";
+  throw new Error(
+    `No Facebook Page with a linked Instagram professional account was shared during login. Pages: ${pageSummary}. Permissions: ${granted}`
+  );
+}
+
+type LinkedInstagram = { id: string; username?: string; name?: string };
+
+// Read the Page itself with its own token. Some Pages only expose the linked
+// account this way, and connected_instagram_account covers accounts linked
+// from the Instagram side.
+async function readLinkedInstagram(
+  base: string,
+  pageId: string,
+  pageToken: string
+): Promise<LinkedInstagram | undefined> {
+  const url = new URL(`${base}/${pageId}`);
+  url.searchParams.set(
+    "fields",
+    "instagram_business_account{id,username,name},connected_instagram_account{id,username,name}"
+  );
+  url.searchParams.set("access_token", pageToken);
+  try {
+    const data = await readGraph<{
+      instagram_business_account?: LinkedInstagram;
+      connected_instagram_account?: LinkedInstagram;
+    }>(url);
+    return data.instagram_business_account ?? data.connected_instagram_account;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readGrantedPermissions(base: string, userToken: string): Promise<string> {
+  const url = new URL(`${base}/me/permissions`);
+  url.searchParams.set("access_token", userToken);
+  try {
+    const data = await readGraph<{ data?: Array<{ permission: string; status: string }> }>(url);
+    const granted = (data.data ?? [])
+      .filter((p) => p.status === "granted")
+      .map((p) => p.permission);
+    return granted.length ? granted.join(",") : "none";
+  } catch {
+    return "unknown";
+  }
 }
 
 function getEncryptionKey(): Buffer {

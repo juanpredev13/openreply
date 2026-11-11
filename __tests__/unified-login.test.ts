@@ -112,10 +112,26 @@ describe("Unified Login mode", () => {
     fetchMock
       .mockResolvedValueOnce(json({ access_token: "short" }))
       .mockResolvedValueOnce(json({ access_token: "long" }))
-      .mockResolvedValueOnce(json({ data: [{ id: "p0", access_token: "pt0" }] }));
+      .mockResolvedValueOnce(json({ data: [{ id: "p0", name: "Mi Página", access_token: "pt0" }] }))
+      .mockResolvedValueOnce(json({ id: "p0" }))
+      .mockResolvedValueOnce(
+        json({ data: [{ permission: "pages_show_list", status: "granted" }] })
+      );
     await expect(exchangeUnifiedCode("code", "https://x.test/cb")).rejects.toThrow(
-      /No Facebook Page/
+      /No Facebook Page.*Pages: Mi Página.*Permissions: pages_show_list/
     );
+  });
+
+  it("falls back to reading the Page with its own token", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ access_token: "short" }))
+      .mockResolvedValueOnce(json({ access_token: "long" }))
+      .mockResolvedValueOnce(json({ data: [{ id: "p0", access_token: "pt0" }] }))
+      .mockResolvedValueOnce(
+        json({ id: "p0", connected_instagram_account: { id: "ig_5", username: "juan" } })
+      );
+    const result = await exchangeUnifiedCode("code", "https://x.test/cb");
+    expect(result).toMatchObject({ instagramId: "ig_5", accessToken: "pt0", pageId: "p0" });
   });
 
   it("sends messages through the Page on graph.facebook.com", async () => {
