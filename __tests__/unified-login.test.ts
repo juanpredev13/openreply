@@ -115,6 +115,7 @@ describe("Unified Login mode", () => {
       .mockResolvedValueOnce(json({ access_token: "long" }))
       .mockResolvedValueOnce(json({ data: [{ id: "p0", name: "Mi Página", access_token: "pt0" }] }))
       .mockResolvedValueOnce(json({ data: [{ id: "b1", name: "Juanpredev" }] }))
+      .mockResolvedValueOnce(json({ data: { granular_scopes: [] } }))
       .mockResolvedValueOnce(json({ id: "p0" }))
       .mockResolvedValueOnce(
         json({ data: [{ permission: "pages_show_list", status: "granted" }] })
@@ -151,12 +152,43 @@ describe("Unified Login mode", () => {
     expect(result).toMatchObject({ instagramId: "ig_7", accessToken: "pt7", pageId: "p7" });
   });
 
+  it("reads Pages named in the token's granular scopes", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ access_token: "short" }))
+      .mockResolvedValueOnce(json({ access_token: "long" }))
+      .mockResolvedValueOnce(json({ data: [] }))
+      .mockResolvedValueOnce(json({ error: { message: "no businesses" } }, 400))
+      .mockResolvedValueOnce(
+        json({
+          data: {
+            granular_scopes: [
+              { scope: "pages_show_list", target_ids: ["p3"] },
+              { scope: "instagram_basic", target_ids: ["ig_3"] },
+            ],
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        json({
+          id: "p3",
+          access_token: "pt3",
+          instagram_business_account: { id: "ig_3", username: "juan" },
+        })
+      );
+    const result = await exchangeUnifiedCode("code", "https://x.test/cb");
+    expect(result).toMatchObject({ instagramId: "ig_3", accessToken: "pt3", pageId: "p3" });
+    const debug = new URL(String(fetchMock.mock.calls[4][0]));
+    expect(debug.pathname).toBe("/v25.0/debug_token");
+    expect(debug.searchParams.get("access_token")).toBe("meta_app|fb_secret");
+  });
+
   it("falls back to reading the Page with its own token", async () => {
     fetchMock
       .mockResolvedValueOnce(json({ access_token: "short" }))
       .mockResolvedValueOnce(json({ access_token: "long" }))
       .mockResolvedValueOnce(json({ data: [{ id: "p0", access_token: "pt0" }] }))
       .mockResolvedValueOnce(json({ data: [] }))
+      .mockResolvedValueOnce(json({ data: { granular_scopes: [] } }))
       .mockResolvedValueOnce(
         json({ id: "p0", connected_instagram_account: { id: "ig_5", username: "juan" } })
       );

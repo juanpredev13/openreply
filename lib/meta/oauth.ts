@@ -219,6 +219,15 @@ export async function exchangeUnifiedCode(
   for (const page of businesses.pages) {
     if (!list.some((p) => p.id === page.id)) list.push(page);
   }
+  // Last resort: the token's granular scopes name the exact Pages and
+  // Instagram accounts approved in the dialog, even when the list edges
+  // above come back empty. Read those Pages directly.
+  const scopes = await readGranularTargets(base, long.access_token, appId, appSecret);
+  for (const pageId of scopes.pageIds) {
+    if (list.some((p) => p.id === pageId)) continue;
+    const page = await readPageById(base, pageId, long.access_token);
+    if (page) list.push(page);
+  }
   for (const candidate of list) {
     if (!candidate.access_token) continue;
     const ig =
@@ -242,8 +251,60 @@ export async function exchangeUnifiedCode(
     ? list.map((p) => `${p.name ?? p.id}${p.access_token ? "" : " (no token)"}`).join(", ")
     : "none";
   throw new Error(
-    `No Facebook Page with a linked Instagram professional account was shared during login. Pages: ${pageSummary}. Businesses: ${businesses.summary}. Permissions: ${granted}`
+    `No Facebook Page with a linked Instagram professional account was shared during login. Pages: ${pageSummary}. Businesses: ${businesses.summary}. Approved pages: ${scopes.pageIds.join("/") || "none"}, IG: ${scopes.instagramIds.join("/") || "none"}. Permissions: ${granted}`
   );
+}
+
+async function readGranularTargets(
+  base: string,
+  userToken: string,
+  appId: string,
+  appSecret: string
+): Promise<{ pageIds: string[]; instagramIds: string[] }> {
+  const url = new URL(`${base}/debug_token`);
+  url.searchParams.set("input_token", userToken);
+  url.searchParams.set("access_token", `${appId}|${appSecret}`);
+  try {
+    const data = await readGraph<{
+      data?: { granular_scopes?: Array<{ scope: string; target_ids?: string[] }> };
+    }>(url);
+    const scopes = data.data?.granular_scopes ?? [];
+    const targets = (names: string[]) => [
+      ...new Set(
+        scopes
+          .filter((s) => names.includes(s.scope))
+          .flatMap((s) => s.target_ids ?? [])
+      ),
+    ];
+    return {
+      pageIds: targets(["pages_show_list", "pages_read_engagement"]),
+      instagramIds: targets([
+        "instagram_basic",
+        "instagram_manage_messages",
+        "instagram_manage_comments",
+      ]),
+    };
+  } catch {
+    return { pageIds: [], instagramIds: [] };
+  }
+}
+
+async function readPageById(
+  base: string,
+  pageId: string,
+  userToken: string
+): Promise<FacebookPage | undefined> {
+  const url = new URL(`${base}/${pageId}`);
+  url.searchParams.set(
+    "fields",
+    "id,name,access_token,instagram_business_account{id,username,name}"
+  );
+  url.searchParams.set("access_token", userToken);
+  try {
+    return await readGraph<FacebookPage>(url);
+  } catch {
+    return undefined;
+  }
 }
 
 async function readBusinessPages(
