@@ -36,8 +36,27 @@ const INSTAGRAM_OAUTH_ENV = [
   "NEXTAUTH_SECRET",
 ] as const;
 
+// Unified Login (Facebook Login for Business) uses the Meta app's own ID and
+// secret plus a Login for Business configuration ID.
+const UNIFIED_OAUTH_ENV = [
+  "META_APP_ID",
+  "FACEBOOK_APP_SECRET",
+  "META_LOGIN_CONFIG_ID",
+  "ENCRYPTION_KEY",
+  "NEXTAUTH_SECRET",
+] as const;
+
+/**
+ * True when META_LOGIN_MODE=unified: the app was created after Meta forced
+ * "Instagram API with Unified Login" and cannot use Instagram Login.
+ */
+export function isUnifiedLogin(): boolean {
+  return process.env.META_LOGIN_MODE?.trim().toLowerCase() === "unified";
+}
+
 export function getMissingInstagramOAuthEnv(): string[] {
-  return INSTAGRAM_OAUTH_ENV.filter((name) => {
+  const required = isUnifiedLogin() ? UNIFIED_OAUTH_ENV : INSTAGRAM_OAUTH_ENV;
+  return required.filter((name) => {
     const value = process.env[name];
     if (!value) return true;
     // A malformed key fails later inside encryptToken, after the user has

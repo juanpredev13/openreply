@@ -5,7 +5,12 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "crypto";
-import { getEncryptionKeyHex, requireEnv } from "@/lib/env";
+import {
+  getEncryptionKeyHex,
+  getMetaGraphApiVersion,
+  isUnifiedLogin,
+  requireEnv,
+} from "@/lib/env";
 
 // Instagram API with Instagram Login authorizes on www.instagram.com. The old
 // api.instagram.com/oauth/authorize host belonged to the retired Basic Display
@@ -88,6 +93,19 @@ export function verifyOAuthState(state: string | null): OAuthStatePayload | null
 }
 
 export function getAuthorizationUrl(redirectUri: string, state: string): string {
+  if (isUnifiedLogin()) {
+    // Facebook Login for Business: the permissions come from the
+    // configuration, so no scope is sent.
+    const params = new URLSearchParams({
+      client_id: requireEnv("META_APP_ID"),
+      redirect_uri: redirectUri,
+      config_id: requireEnv("META_LOGIN_CONFIG_ID"),
+      response_type: "code",
+      state,
+    });
+    return `https://www.facebook.com/${getMetaGraphApiVersion()}/dialog/oauth?${params.toString()}`;
+  }
+
   const params = new URLSearchParams({
     client_id: requireEnv("INSTAGRAM_APP_ID"),
     redirect_uri: redirectUri,
@@ -129,6 +147,87 @@ export async function exchangeCodeForToken(
   return {
     accessToken: data.access_token,
     userId: String(data.user_id),
+  };
+}
+
+export interface UnifiedConnection {
+  /** Page access token for the Page linked to the Instagram account. */
+  accessToken: string;
+  instagramId: string;
+  username: string;
+  name?: string;
+  pageId: string;
+}
+
+interface FacebookPage {
+  id: string;
+  name?: string;
+  access_token?: string;
+  instagram_business_account?: { id: string; username?: string; name?: string };
+}
+
+async function readGraph<T>(url: URL): Promise<T> {
+  const response = await fetch(url.toString());
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.message ?? JSON.stringify(data);
+    throw new Error(`Facebook Login failed: ${message}`);
+  }
+  return data as T;
+}
+
+/**
+ * Unified Login code exchange. The short-lived user token becomes a long-lived
+ * one, and a Page token read with a long-lived user token does not expire, so
+ * the stored token never needs the refresh cron.
+ */
+export async function exchangeUnifiedCode(
+  code: string,
+  redirectUri: string
+): Promise<UnifiedConnection> {
+  const base = `https://graph.facebook.com/${getMetaGraphApiVersion()}`;
+  const appId = requireEnv("META_APP_ID");
+  const appSecret = requireEnv("FACEBOOK_APP_SECRET");
+
+  const shortUrl = new URL(`${base}/oauth/access_token`);
+  shortUrl.searchParams.set("client_id", appId);
+  shortUrl.searchParams.set("client_secret", appSecret);
+  shortUrl.searchParams.set("redirect_uri", redirectUri);
+  shortUrl.searchParams.set("code", code);
+  const short = await readGraph<{ access_token: string }>(shortUrl);
+
+  const longUrl = new URL(`${base}/oauth/access_token`);
+  longUrl.searchParams.set("grant_type", "fb_exchange_token");
+  longUrl.searchParams.set("client_id", appId);
+  longUrl.searchParams.set("client_secret", appSecret);
+  longUrl.searchParams.set("fb_exchange_token", short.access_token);
+  const long = await readGraph<{ access_token: string }>(longUrl);
+
+  const pagesUrl = new URL(`${base}/me/accounts`);
+  pagesUrl.searchParams.set(
+    "fields",
+    "id,name,access_token,instagram_business_account{id,username,name}"
+  );
+  pagesUrl.searchParams.set("limit", "100");
+  pagesUrl.searchParams.set("access_token", long.access_token);
+  const pages = await readGraph<{ data?: FacebookPage[] }>(pagesUrl);
+
+  const page = pages.data?.find(
+    (p) => p.instagram_business_account?.id && p.access_token
+  );
+  if (!page?.instagram_business_account || !page.access_token) {
+    throw new Error(
+      "No Facebook Page with a linked Instagram professional account was shared during login"
+    );
+  }
+
+  const ig = page.instagram_business_account;
+  return {
+    accessToken: page.access_token,
+    instagramId: ig.id,
+    username: ig.username ?? "",
+    name: ig.name,
+    pageId: page.id,
   };
 }
 

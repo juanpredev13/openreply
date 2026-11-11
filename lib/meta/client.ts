@@ -1,4 +1,4 @@
-import { getMetaGraphApiVersion, requireEnv } from "@/lib/env";
+import { getMetaGraphApiVersion, isUnifiedLogin, requireEnv } from "@/lib/env";
 
 function instagramGraphBase() {
   return `https://graph.instagram.com/${getMetaGraphApiVersion()}`;
@@ -6,6 +6,46 @@ function instagramGraphBase() {
 
 function facebookGraphBase() {
   return `https://graph.facebook.com/${getMetaGraphApiVersion()}`;
+}
+
+// Apps created after Meta forced "Instagram API with Unified Login" can only
+// use Facebook Login for Business. Their tokens are Page access tokens and
+// every call goes to graph.facebook.com. In that mode the stored token belongs
+// to the Facebook Page linked to the Instagram account, so `me` resolves to
+// the Page: messaging, conversations and webhook subscriptions hang off the
+// Page, while media and profile reads need the Instagram account ID.
+function graphBase() {
+  return isUnifiedLogin() ? facebookGraphBase() : instagramGraphBase();
+}
+
+function messagingNode(instagramAccountId: string) {
+  return isUnifiedLogin() ? "me" : instagramAccountId;
+}
+
+const instagramIdByToken = new Map<string, string>();
+
+/**
+ * The node that owns the account's media: `me` for Instagram Login tokens, the
+ * Instagram professional account ID (read from the Page) for Unified Login.
+ */
+export async function resolveSelfNode(accessToken: string): Promise<string> {
+  if (!isUnifiedLogin()) return "me";
+  const cached = instagramIdByToken.get(accessToken);
+  if (cached) return cached;
+
+  const url = new URL(`${facebookGraphBase()}/me`);
+  url.searchParams.set("fields", "instagram_business_account");
+  url.searchParams.set("access_token", accessToken);
+  const data = await handleResponse<{
+    instagram_business_account?: { id: string };
+  }>(await fetch(url.toString()));
+  const id = data.instagram_business_account?.id;
+  if (!id) {
+    throw new Error("No Instagram professional account is linked to this Facebook Page");
+  }
+  if (instagramIdByToken.size > 100) instagramIdByToken.clear();
+  instagramIdByToken.set(accessToken, id);
+  return id;
 }
 
 export class MetaApiError extends Error {
@@ -168,7 +208,7 @@ export async function sendPrivateReply(
   message: string
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/messages`,
     {
       method: "POST",
       headers: {
@@ -200,7 +240,7 @@ export async function sendPrivateReplyWithButton(
   payload: string
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/messages`,
     {
       method: "POST",
       headers: {
@@ -243,7 +283,7 @@ export async function sendDirectMessageWithButton(
   payload: string
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/messages`,
     {
       method: "POST",
       headers: {
@@ -282,7 +322,7 @@ export async function getUserFollowStatus(
   accessToken: string,
   recipientId: string
 ): Promise<boolean | null> {
-  const url = new URL(`${instagramGraphBase()}/${recipientId}`);
+  const url = new URL(`${graphBase()}/${recipientId}`);
   url.searchParams.set("fields", "is_user_follow_business");
 
   try {
@@ -313,7 +353,7 @@ export async function getUserUsername(
   accessToken: string,
   recipientId: string
 ): Promise<string | null> {
-  const url = new URL(`${instagramGraphBase()}/${recipientId}`);
+  const url = new URL(`${graphBase()}/${recipientId}`);
   url.searchParams.set("fields", "username");
 
   try {
@@ -359,7 +399,7 @@ export async function sendPrivateReplyWithLinkButton(
   buttons: LinkButton[]
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/messages`,
     {
       method: "POST",
       headers: {
@@ -396,7 +436,7 @@ export async function sendDirectMessage(
   message: string
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/messages`,
     {
       method: "POST",
       headers: {
@@ -425,7 +465,7 @@ export async function sendDirectMessageWithLinkButton(
   buttons: LinkButton[]
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/messages`,
     {
       method: "POST",
       headers: {
@@ -457,7 +497,7 @@ export async function sendCommentReply(
   message: string
 ): Promise<{ id: string }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${commentId}/replies`,
+    `${graphBase()}/${commentId}/replies`,
     {
       method: "POST",
       headers: {
@@ -475,7 +515,7 @@ export async function getMediaComments(
   accessToken: string,
   mediaId: string
 ): Promise<InstagramComment[]> {
-  const url = new URL(`${instagramGraphBase()}/${mediaId}/comments`);
+  const url = new URL(`${graphBase()}/${mediaId}/comments`);
   url.searchParams.set("fields", "id,text,from,timestamp");
   url.searchParams.set("access_token", accessToken);
 
@@ -503,7 +543,7 @@ export async function getRecentMediaComments(
 ): Promise<InstagramComment[]> {
   const results: InstagramComment[] = [];
 
-  const first = new URL(`${instagramGraphBase()}/${mediaId}/comments`);
+  const first = new URL(`${graphBase()}/${mediaId}/comments`);
   first.searchParams.set("fields", "id,text,timestamp,from,replies{from}");
   first.searchParams.set("order", "reverse_chronological");
   first.searchParams.set("limit", "50");
@@ -583,7 +623,7 @@ export async function getConversations(
   async function readPage(limit: number, requestedFields: string): Promise<Page> {
     // Never follow Meta's next URL: rebuild on our trusted host and carry the
     // token separately. A messages.paging cursor must never advance this list.
-    const url = new URL(`${instagramGraphBase()}/${igUserId}/conversations`);
+    const url = new URL(`${graphBase()}/${messagingNode(igUserId)}/conversations`);
     url.searchParams.set("platform", "instagram");
     url.searchParams.set("fields", requestedFields);
     url.searchParams.set("limit", String(limit));
@@ -653,7 +693,7 @@ export async function getConversationMessages(
   accessToken: string,
   conversationId: string
 ): Promise<InstagramMessage[]> {
-  const url = new URL(`${instagramGraphBase()}/${conversationId}`);
+  const url = new URL(`${graphBase()}/${conversationId}`);
   url.searchParams.set("fields", "messages{id,created_time,from,to,message}");
   url.searchParams.set("access_token", accessToken);
 
@@ -665,7 +705,19 @@ export async function getConversationMessages(
 }
 
 export async function getUserInfo(accessToken: string): Promise<InstagramUser> {
-  const url = new URL(`${instagramGraphBase()}/me`);
+  if (isUnifiedLogin()) {
+    const instagramId = await resolveSelfNode(accessToken);
+    const url = new URL(`${facebookGraphBase()}/${instagramId}`);
+    url.searchParams.set(
+      "fields",
+      "id,username,name,profile_picture_url,followers_count"
+    );
+    url.searchParams.set("access_token", accessToken);
+    const info = await handleResponse<InstagramUser>(await fetch(url.toString()));
+    return { ...info, user_id: info.id };
+  }
+
+  const url = new URL(`${graphBase()}/me`);
   url.searchParams.set(
     "fields",
     "id,user_id,username,name,profile_picture_url,followers_count"
@@ -686,7 +738,7 @@ export async function getUserMedia(
   accessToken: string,
   limit = 25
 ): Promise<InstagramMedia[]> {
-  const url = new URL(`${instagramGraphBase()}/me/media`);
+  const url = new URL(`${graphBase()}/${await resolveSelfNode(accessToken)}/media`);
   url.searchParams.set("fields", MEDIA_FIELDS);
   url.searchParams.set("limit", limit.toString());
   url.searchParams.set("access_token", accessToken);
@@ -708,7 +760,7 @@ export async function getAllUserMedia(
 ): Promise<InstagramMedia[]> {
   const results: InstagramMedia[] = [];
 
-  const first = new URL(`${instagramGraphBase()}/me/media`);
+  const first = new URL(`${graphBase()}/${await resolveSelfNode(accessToken)}/media`);
   first.searchParams.set("fields", MEDIA_FIELDS);
   first.searchParams.set("limit", String(Math.min(MEDIA_PAGE_SIZE, max)));
   first.searchParams.set("access_token", accessToken);
@@ -741,7 +793,7 @@ export async function getMediaInsights(
   mediaId: string,
   metrics: string[]
 ): Promise<InstagramMediaInsights> {
-  const url = new URL(`${instagramGraphBase()}/${mediaId}/insights`);
+  const url = new URL(`${graphBase()}/${mediaId}/insights`);
   url.searchParams.set("metric", metrics.join(","));
   url.searchParams.set("access_token", accessToken);
 
@@ -791,7 +843,7 @@ export async function getFollowerCountSeries(
   const until = Math.floor(Date.now() / 1000);
   const since = until - (span - 1) * 86_400;
 
-  const url = new URL(`${instagramGraphBase()}/${instagramAccountId}/insights`);
+  const url = new URL(`${graphBase()}/${instagramAccountId}/insights`);
   url.searchParams.set("metric", "follower_count");
   url.searchParams.set("period", "day");
   url.searchParams.set("since", String(since));
@@ -865,15 +917,19 @@ export async function subscribeInstagramAccountToWebhooks(
   accessToken: string
 ): Promise<{ success: boolean }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/subscribed_apps`,
+    `${graphBase()}/${messagingNode(instagramAccountId)}/subscribed_apps`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
+      // A Page subscription takes Page fields; the Instagram comments and
+      // messages topics themselves are chosen on the app's Instagram webhook.
       body: JSON.stringify({
-        subscribed_fields: ["comments", "messages"],
+        subscribed_fields: isUnifiedLogin()
+          ? ["feed", "messages"]
+          : ["comments", "messages"],
       }),
     }
   );

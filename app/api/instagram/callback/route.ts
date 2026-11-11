@@ -1,15 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
-import { getBaseUrl } from "@/lib/env";
+import { getBaseUrl, isUnifiedLogin } from "@/lib/env";
 import { canConnectInstagramAccount } from "@/lib/instagram-accounts";
 import { getLongLivedToken, getUserInfo, subscribeInstagramAccountToWebhooks } from "@/lib/meta/client";
 import {
   encryptToken,
   exchangeCodeForToken,
+  exchangeUnifiedCode,
   verifyOAuthState,
 } from "@/lib/meta/oauth";
 import { canManageWorkspace } from "@/lib/workspace-access";
+
+interface ConnectedAccount {
+  accessToken: string;
+  instagramId: string;
+  username: string;
+  name?: string;
+  tokenExpiresAt: Date | null;
+}
+
+async function connectWithInstagramLogin(
+  code: string,
+  redirectUri: string
+): Promise<ConnectedAccount> {
+  const { accessToken: shortLivedToken } = await exchangeCodeForToken(
+    code,
+    redirectUri
+  );
+  const { accessToken, expiresIn } = await getLongLivedToken(shortLivedToken);
+  const userInfo = await getUserInfo(accessToken);
+  // Webhooks and the messaging API key off the professional account ID
+  // (user_id), not the app-scoped `id`. Store user_id so comment webhooks
+  // can be matched back to this account. Fall back to id if user_id is
+  // ever absent.
+  return {
+    accessToken,
+    instagramId: userInfo.user_id ?? userInfo.id,
+    username: userInfo.username,
+    name: userInfo.name,
+    tokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
+  };
+}
+
+// Page tokens obtained through a long-lived user token do not expire, so the
+// account is stored with no expiry and the refresh cron skips it.
+async function connectWithUnifiedLogin(
+  code: string,
+  redirectUri: string
+): Promise<ConnectedAccount> {
+  const unified = await exchangeUnifiedCode(code, redirectUri);
+  let { username, name } = unified;
+  if (!username) {
+    const info = await getUserInfo(unified.accessToken);
+    username = info.username;
+    name = name ?? info.name;
+  }
+  return {
+    accessToken: unified.accessToken,
+    instagramId: unified.instagramId,
+    username,
+    name,
+    tokenExpiresAt: null,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -43,18 +97,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const redirectUri = `${baseUrl}/api/instagram/callback`;
-    const { accessToken: shortLivedToken } = await exchangeCodeForToken(
-      code,
-      redirectUri
-    );
-    const { accessToken: longLivedToken, expiresIn } =
-      await getLongLivedToken(shortLivedToken);
-    const userInfo = await getUserInfo(longLivedToken);
-    // Webhooks and the messaging API key off the professional account ID
-    // (user_id), not the app-scoped `id`. Store user_id so comment webhooks
-    // can be matched back to this account. Fall back to id if user_id is
-    // ever absent.
-    const instagramId = userInfo.user_id ?? userInfo.id;
+    const { accessToken, instagramId, username, name, tokenExpiresAt } =
+      isUnifiedLogin()
+        ? await connectWithUnifiedLogin(code, redirectUri)
+        : await connectWithInstagramLogin(code, redirectUri);
     const connection = await canConnectInstagramAccount({
       workspaceId: state.workspaceId,
       instagramId,
@@ -66,14 +112,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const encryptedToken = encryptToken(longLivedToken);
-    const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
+    const encryptedToken = encryptToken(accessToken);
 
     let webhookSubscribed = false;
     try {
       const subscription = await subscribeInstagramAccountToWebhooks(
         instagramId,
-        longLivedToken
+        accessToken
       );
       webhookSubscribed = Boolean(subscription.success);
     } catch (subscriptionError) {
@@ -84,8 +129,8 @@ export async function GET(request: NextRequest) {
     }
 
     const data = {
-      username: userInfo.username,
-      name: userInfo.name,
+      username,
+      name,
       accessToken: encryptedToken,
       tokenExpiresAt,
       webhookSubscribed,
