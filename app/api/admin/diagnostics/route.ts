@@ -15,10 +15,19 @@ export async function GET() {
     );
   }
 
+  // Worker alerts live in one instance-wide Redis list, so keep only the ones
+  // for this workspace's own Instagram accounts. Events without a workspace,
+  // the worker host and its pid stay out of tenant-facing responses.
+  const ownAccounts = await prisma.instagramAccount.findMany({
+    where: { workspaceId },
+    select: { instagramId: true },
+  });
+  const ownInstagramIds = new Set(ownAccounts.map((account) => account.instagramId));
+
   const [
     queueCounts,
     workerHealth,
-    workerAlerts,
+    allWorkerAlerts,
     webhookFailures,
     dmFailures,
     tokenRefreshFailures,
@@ -26,7 +35,7 @@ export async function GET() {
   ] = await Promise.all([
     getDMQueue().getJobCounts("waiting", "active", "delayed", "failed"),
     getWorkerHealth(),
-    getWorkerAlerts(10),
+    getWorkerAlerts(25),
     prisma.webhookEvent.findMany({
       where: { workspaceId, status: "FAILED" },
       orderBy: { createdAt: "desc" },
@@ -75,9 +84,7 @@ export async function GET() {
       },
     }),
     prisma.operationalEvent.findMany({
-      where: {
-        OR: [{ workspaceId }, { workspaceId: null }],
-      },
+      where: { workspaceId },
       orderBy: { createdAt: "desc" },
       take: 20,
       select: {
@@ -91,11 +98,32 @@ export async function GET() {
     }),
   ]);
 
+  const workerAlerts = allWorkerAlerts
+    .filter(
+      (alert) =>
+        alert.instagramAccountId !== undefined &&
+        ownInstagramIds.has(alert.instagramAccountId)
+    )
+    .slice(0, 10)
+    .map((alert) => ({
+      level: alert.level,
+      message: alert.message,
+      jobId: alert.jobId,
+      commentId: alert.commentId,
+      createdAt: alert.createdAt,
+    }));
+
   return NextResponse.json({
     success: true,
     data: {
       queueCounts,
-      workerHealth,
+      workerHealth: {
+        healthy: workerHealth.healthy,
+        ageMs: workerHealth.ageMs,
+        heartbeat: workerHealth.heartbeat
+          ? { checkedAt: workerHealth.heartbeat.checkedAt }
+          : null,
+      },
       workerAlerts,
       webhookFailures,
       dmFailures,

@@ -11,9 +11,6 @@ interface DiagnosticsData {
     ageMs: number | null;
     heartbeat: {
       checkedAt: string;
-      hostname?: string;
-      pid: number;
-      startedAt?: string;
     } | null;
   };
   workerAlerts: Array<{

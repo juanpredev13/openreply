@@ -26,7 +26,28 @@ const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 interface OAuthStatePayload {
   workspaceId: string;
+  /** User who started the connect flow; the callback session must match. */
+  userId: string;
+  /** Random per-flow value, also stored in an httpOnly cookie on the initiating browser. */
+  nonce: string;
   ts: number;
+}
+
+/** Cookie that binds an OAuth state to the browser that started the flow. */
+export const OAUTH_NONCE_COOKIE = "openreply_ig_oauth_nonce";
+export const OAUTH_NONCE_COOKIE_PATH = "/api/instagram/callback";
+export const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
+
+export function createOAuthNonce(): string {
+  return randomBytes(16).toString("base64url");
+}
+
+/** Constant-time check that the cookie nonce matches the one inside the state. */
+export function oauthNonceMatches(cookieNonce: string | undefined, stateNonce: string): boolean {
+  if (!cookieNonce) return false;
+  const a = Buffer.from(cookieNonce);
+  const b = Buffer.from(stateNonce);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function base64UrlEncode(value: string): string {
@@ -43,9 +64,9 @@ function signState(payload: string): string {
     .digest("base64url");
 }
 
-export function createOAuthState(workspaceId: string): string {
+export function createOAuthState(workspaceId: string, userId: string, nonce: string): string {
   const payload = base64UrlEncode(
-    JSON.stringify({ workspaceId, ts: Date.now() } satisfies OAuthStatePayload)
+    JSON.stringify({ workspaceId, userId, nonce, ts: Date.now() } satisfies OAuthStatePayload)
   );
   return `${payload}.${signState(payload)}`;
 }
@@ -72,6 +93,8 @@ export function verifyOAuthState(state: string | null): OAuthStatePayload | null
     if (typeof parsed.workspaceId !== "string" || !parsed.workspaceId) {
       return null;
     }
+    if (typeof parsed.userId !== "string" || !parsed.userId) return null;
+    if (typeof parsed.nonce !== "string" || parsed.nonce.length < 16) return null;
 
     // Reject a missing or non-numeric timestamp. `Date.now() - "abc"` is NaN,
     // and every comparison against NaN is false, so a non-numeric ts would

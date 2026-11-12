@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { attachPendingNextReels } from "@/lib/automation/attach-next-reel";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 /**
  * Binds "next reel" campaigns to a real post.
@@ -12,10 +13,7 @@ import { attachPendingNextReels } from "@/lib/automation/attach-next-reel";
  */
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || process.env.NEXTAUTH_SECRET;
-
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"))) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }

@@ -35,9 +35,8 @@ export async function acceptPendingInvitationsForUser(
           userId,
           role: invitation.role,
         },
-        update: {
-          role: invitation.role,
-        },
+        // An existing membership keeps its role; an invitation never demotes an OWNER.
+        update: {},
       }),
       prisma.workspaceInvitation.update({
         where: { id: invitation.id },

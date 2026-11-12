@@ -6,6 +6,7 @@ import {
   backfillFollowerHistory,
   recordFollowerSnapshot,
 } from "@/lib/reports/follower-history";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 /**
  * Records one follower total per connected account per day.
@@ -15,10 +16,7 @@ import {
  * permanently — there is no way to backfill beyond the insights window.
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || process.env.NEXTAUTH_SECRET;
-
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"))) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }

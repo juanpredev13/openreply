@@ -23,13 +23,23 @@ describe("OAuth state and token encryption", () => {
   });
 
   it("signs and verifies Instagram OAuth state", () => {
-    const state = createOAuthState("workspace_123");
-    expect(verifyOAuthState(state)?.workspaceId).toBe("workspace_123");
+    const state = createOAuthState("workspace_123", "user_1", "nonce-0123456789abcdef");
+    expect(verifyOAuthState(state)).toMatchObject({
+      workspaceId: "workspace_123",
+      userId: "user_1",
+      nonce: "nonce-0123456789abcdef",
+    });
   });
 
   it("rejects tampered OAuth state", () => {
-    const state = createOAuthState("workspace_123");
+    const state = createOAuthState("workspace_123", "user_1", "nonce-0123456789abcdef");
     expect(verifyOAuthState(`${state}tampered`)).toBeNull();
+  });
+
+  it("rejects a legacy state that is not bound to a user and nonce", () => {
+    const encoded = Buffer.from(JSON.stringify({ workspaceId: "workspace_123", ts: Date.now() })).toString("base64url");
+    const signature = createHmac("sha256", process.env.NEXTAUTH_SECRET!).update(encoded).digest("base64url");
+    expect(verifyOAuthState(`${encoded}.${signature}`)).toBeNull();
   });
 
   // Builds a state whose signature is valid but whose payload has an

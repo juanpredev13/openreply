@@ -8,6 +8,9 @@ import {
   encryptToken,
   exchangeCodeForToken,
   exchangeUnifiedCode,
+  OAUTH_NONCE_COOKIE,
+  OAUTH_NONCE_COOKIE_PATH,
+  oauthNonceMatches,
   verifyOAuthState,
 } from "@/lib/meta/oauth";
 import { canManageWorkspace } from "@/lib/workspace-access";
@@ -66,6 +69,13 @@ async function connectWithUnifiedLogin(
 }
 
 export async function GET(request: NextRequest) {
+  const response = await handleCallback(request);
+  // One-time: whatever the outcome, the nonce cannot be used again.
+  response.cookies.set(OAUTH_NONCE_COOKIE, "", { path: OAUTH_NONCE_COOKIE_PATH, maxAge: 0 });
+  return response;
+}
+
+async function handleCallback(request: NextRequest): Promise<NextResponse> {
   const code = request.nextUrl.searchParams.get("code");
   const error = request.nextUrl.searchParams.get("error");
   const state = verifyOAuthState(request.nextUrl.searchParams.get("state"));
@@ -82,6 +92,14 @@ export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.redirect(`${baseUrl}/login`);
+  }
+
+  // The flow must finish in the browser and for the user that started it.
+  if (
+    state.userId !== session.user.id ||
+    !oauthNonceMatches(request.cookies.get(OAUTH_NONCE_COOKIE)?.value, state.nonce)
+  ) {
+    return NextResponse.redirect(`${baseUrl}/settings?instagram=invalid`);
   }
 
   const membership = await prisma.workspaceMember.findFirst({
