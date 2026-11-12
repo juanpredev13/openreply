@@ -14,6 +14,7 @@ export const createAutomationSchema = z
     postUrl: z.string().url().optional().nullable(),
     pendingNextReel: z.boolean().optional().default(false),
     matchAnyPost: z.boolean().optional().default(false),
+    matchLive: z.boolean().optional().default(false),
     keywords: z.array(z.string().min(1).max(50)).max(10).optional().default([]),
     matchAnyWord: z.boolean().optional().default(false),
     dmTriggerEnabled: z.boolean().optional().default(false),
@@ -53,7 +54,7 @@ export const createAutomationSchema = z
   })
   // A campaign must target a specific post, any post, or the next reel.
   .refine(
-    (d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId),
+    (d) => d.matchAnyPost || d.pendingNextReel || d.matchLive || Boolean(d.postId),
     { message: "Choose which post(s) trigger the campaign", path: ["postId"] }
   )
   // And it must match either specific words or any word.
@@ -115,10 +116,10 @@ export async function createCampaign(
     secondaryLabel: input.secondaryButtonLabel,
   });
 
-  const { pendingNextReel, matchAnyPost, matchAnyWord, openingDmEnabled } =
+  const { pendingNextReel, matchAnyPost, matchLive, matchAnyWord, openingDmEnabled } =
     input;
   // A post is only stored for the "specific post" trigger.
-  const isSpecificPost = !pendingNextReel && !matchAnyPost;
+  const isSpecificPost = !pendingNextReel && !matchAnyPost && !matchLive;
   const publicReplyList = (
     input.publicReplyMessages.length > 0
       ? input.publicReplyMessages
@@ -138,6 +139,7 @@ export async function createCampaign(
       postUrl: isSpecificPost ? input.postUrl : null,
       pendingNextReel,
       matchAnyPost,
+      matchLive,
       keywords: matchAnyWord ? [] : input.keywords,
       matchAnyWord,
       dmTriggerEnabled: input.dmTriggerEnabled,

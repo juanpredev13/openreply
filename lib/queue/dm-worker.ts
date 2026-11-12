@@ -196,6 +196,9 @@ type RevealAutomation = {
  * button-tap (postback) path and the DM keyword-trigger path — both already
  * have an open conversation with the user, so neither uses a private reply.
  */
+
+// Window used to answer each live commenter once per campaign per broadcast.
+const LIVE_DEDUPE_WINDOW_MS = 6 * 60 * 60 * 1000;
 async function sendRevealDirectMessage({
   accessToken,
   automation,
@@ -300,6 +303,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         { postId: mediaId },
         ...(originalMediaId ? [{ postId: originalMediaId }] : []),
         { matchAnyPost: true },
+        ...(job.data.isLive ? [{ matchLive: true }] : []),
       ],
       isActive: true,
       instagramAccount: {
@@ -333,6 +337,22 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
 
     if (!matchResult.matched) {
       continue;
+    }
+
+    // During a live the same person often comments the keyword many times.
+    // Answer them once per campaign per broadcast (a live lasts at most a few
+    // hours), instead of sending a DM for every repeated comment.
+    if (job.data.isLive && automation.matchLive) {
+      const alreadyAnswered = await prisma.dmLog.findFirst({
+        where: {
+          automationId: automation.id,
+          commenterId,
+          commentId: { not: commentId },
+          createdAt: { gte: new Date(Date.now() - LIVE_DEDUPE_WINDOW_MS) },
+        },
+        select: { id: true },
+      });
+      if (alreadyAnswered) continue;
     }
 
     const existingLog = await prisma.dmLog.findUnique({

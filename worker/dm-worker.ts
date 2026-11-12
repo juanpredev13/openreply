@@ -2,6 +2,7 @@ import { createDMWorker } from "@/lib/queue/dm-worker";
 import { recordWorkerHeartbeat } from "@/lib/ops/worker-health";
 import { reconcileComments } from "@/lib/polling/comment-reconciler";
 import { attachPendingNextReels } from "@/lib/automation/attach-next-reel";
+import { pollLiveComments } from "@/lib/polling/live-comments";
 import os from "node:os";
 
 const worker = createDMWorker();
@@ -44,6 +45,27 @@ async function poll() {
   }
 }
 
+// Instagram Live: private replies only work while the broadcast is on air, so
+// live comments are polled every few seconds (only for live campaigns).
+const LIVE_POLL_INTERVAL_MS = Number(process.env.LIVE_POLL_INTERVAL_MS ?? 8_000);
+let livePollRunning = false;
+async function livePoll() {
+  if (livePollRunning) return;
+  livePollRunning = true;
+  try {
+    const result = await pollLiveComments();
+    if (result.enqueued > 0 || result.errors.length > 0) {
+      console.log("[DM Worker] Live comments:", result);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[DM Worker] Live comment polling failed:", message);
+  } finally {
+    livePollRunning = false;
+  }
+}
+const livePollTimer = setInterval(() => void livePoll(), LIVE_POLL_INTERVAL_MS);
+
 // Kick off one sweep shortly after boot, then on a fixed interval.
 setTimeout(() => void poll(), 10_000);
 const pollTimer = setInterval(() => void poll(), POLL_INTERVAL_MS);
@@ -52,6 +74,7 @@ async function shutdown(signal: string) {
   console.log(`[DM Worker] ${signal} received, closing worker`);
   clearInterval(heartbeatTimer);
   clearInterval(pollTimer);
+  clearInterval(livePollTimer);
   await worker.close();
   process.exit(0);
 }

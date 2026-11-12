@@ -25,7 +25,7 @@ import {
   type ImportRow,
 } from "@/lib/import-queue";
 
-type TriggerScope = "specific" | "any" | "next";
+type TriggerScope = "specific" | "any" | "next" | "live";
 type MatchMode = "specific" | "any";
 
 interface LoadedCampaign {
@@ -35,6 +35,7 @@ interface LoadedCampaign {
   postUrl: string | null;
   pendingNextReel: boolean;
   matchAnyPost: boolean;
+  matchLive?: boolean;
   keywords: string[];
   matchAnyWord: boolean;
   wholeWordMatch?: boolean;
@@ -256,7 +257,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setName(c.name);
         setSelectedAccountId(c.instagramAccountId);
         setTriggerScope(
-          c.matchAnyPost ? "any" : c.pendingNextReel ? "next" : "specific"
+          c.matchAnyPost ? "any" : c.pendingNextReel ? "next" : c.matchLive ? "live" : "specific"
         );
         setPostId(c.postId);
         setPostUrl(c.postUrl);
@@ -409,6 +410,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       postUrl: triggerScope === "specific" ? postUrl : null,
       matchAnyPost: triggerScope === "any",
       pendingNextReel: triggerScope === "next",
+      matchLive: triggerScope === "live",
       matchAnyWord: matchMode === "any",
       keywords: matchMode === "any" ? [] : keywords,
       wholeWordMatch,
@@ -700,6 +702,12 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             onSelect={() => setTriggerScope("next")}
           >
             {t("next post or reel")}
+          </Radio>
+          <Radio
+            checked={triggerScope === "live"}
+            onSelect={() => setTriggerScope("live")}
+          >
+            {t("my Instagram Lives (DMs only go out while the live is on air)")}
           </Radio>
         </Section>
 

@@ -1055,3 +1055,44 @@ export async function publishMedia(
   } catch {}
   return { id: published.id, permalink };
 }
+
+// ---------------------------------------------------------------------------
+// Instagram Live. live_comments webhooks need Advanced Access, so until the
+// app passes review the worker polls the live media while it is on air.
+// ---------------------------------------------------------------------------
+
+export interface InstagramLiveMedia {
+  id: string;
+  media_product_type?: string;
+  timestamp?: string;
+}
+
+/** Live broadcasts currently on air for the account (empty when not live). */
+export async function getLiveMedia(accessToken: string): Promise<InstagramLiveMedia[]> {
+  const url = new URL(`${graphBase()}/${await resolveSelfNode(accessToken)}/live_media`);
+  url.searchParams.set("fields", "id,media_product_type,timestamp");
+  url.searchParams.set("access_token", accessToken);
+  const data = await handleResponse<{ data?: InstagramLiveMedia[] }>(await fetch(url.toString()));
+  return data.data ?? [];
+}
+
+/** Comments on a live broadcast, newest pages first, capped at `max`. */
+export async function getLiveComments(
+  accessToken: string,
+  liveMediaId: string,
+  max = 200
+): Promise<InstagramComment[]> {
+  const results: InstagramComment[] = [];
+  const first = new URL(`${graphBase()}/${liveMediaId}/comments`);
+  first.searchParams.set("fields", "id,text,timestamp,from");
+  first.searchParams.set("limit", "50");
+  first.searchParams.set("access_token", accessToken);
+  let nextUrl: string | null = first.toString();
+  while (nextUrl !== null && results.length < max) {
+    const response: Response = await fetch(nextUrl);
+    const page = await handleResponse<{ data?: InstagramComment[]; paging?: { next?: string } }>(response);
+    results.push(...(page.data ?? []));
+    nextUrl = page.paging?.next ?? null;
+  }
+  return results.slice(0, max);
+}

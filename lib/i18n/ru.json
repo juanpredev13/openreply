@@ -473,5 +473,7 @@
   "Create a workspace key for {days} days that can create and activate campaigns? Anyone with this key can start campaigns that send DMs.": "Создать ключ рабочего пространства на {days} дн., который может создавать и включать кампании? Любой, у кого есть этот ключ, сможет запускать кампании, отправляющие личные сообщения.",
   "Workspace-scoped keys. Read keys only read campaigns; write keys can also create, activate and pause them. No key can send messages directly or delete anything. Only admins and owners can manage keys.": "Ключи ограничены рабочим пространством. Ключи чтения только читают кампании; ключи записи также могут создавать, включать и приостанавливать их. Ни один ключ не может напрямую отправлять сообщения или что-либо удалять. Управлять ключами могут только администраторы и владельцы.",
   "Allow publishing posts to Instagram": "Разрешить публиковать посты в Instagram",
-  "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "Создать ключ рабочего пространства на {days} дн., который может публиковать посты в Instagram и создавать кампании? Любой, у кого есть этот ключ, сможет публиковать в вашем Instagram."
+  "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "Создать ключ рабочего пространства на {days} дн., который может публиковать посты в Instagram и создавать кампании? Любой, у кого есть этот ключ, сможет публиковать в вашем Instagram.",
+  "my Instagram Lives (DMs only go out while the live is on air)": "мои эфиры в Instagram (DM отправляются только во время эфира)",
+  "Live": "Эфир"
 }

@@ -195,6 +195,9 @@ model Automation {
   postUrl        String?
   pendingNextReel Boolean @default(false)
   matchAnyPost   Boolean @default(false)
+  // Fire on comments left during the account's Instagram Live broadcasts.
+  // Private replies to live comments only work while the live is on air.
+  matchLive      Boolean @default(false)
   keywords       String[]
   matchAnyWord   Boolean @default(false)
   // Also fire this campaign when someone sends a DM whose text matches the

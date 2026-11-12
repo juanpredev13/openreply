@@ -45,6 +45,8 @@ export interface WebhookCommentEvent {
    * matching has to consider it as well as mediaId.
    */
   originalMediaId?: string;
+  /** True for `live_comments`: a comment on an Instagram Live broadcast. */
+  isLive?: boolean;
 }
 
 interface WebhookEntry {
@@ -121,7 +123,9 @@ export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      if (change.field !== "comments") continue;
+      // live_comments arrive only during a broadcast and need Advanced Access.
+      if (change.field !== "comments" && change.field !== "live_comments") continue;
+      const isLive = change.field === "live_comments";
 
       const value = change.value;
       const commentId = value?.id ?? value?.comment_id;
@@ -154,6 +158,7 @@ export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent
         commenterName: value.from?.username,
         mediaId,
         originalMediaId,
+        ...(isLive ? { isLive: true } : {}),
       });
     }
   }

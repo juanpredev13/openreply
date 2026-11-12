@@ -473,5 +473,7 @@
   "Create a workspace key for {days} days that can create and activate campaigns? Anyone with this key can start campaigns that send DMs.": "建立有效期為 {days} 天、可建立及啟用行銷活動的工作區金鑰？持有此金鑰的人都能啟動會傳送私訊的行銷活動。",
   "Workspace-scoped keys. Read keys only read campaigns; write keys can also create, activate and pause them. No key can send messages directly or delete anything. Only admins and owners can manage keys.": "金鑰僅限於工作區。讀取金鑰只能讀取行銷活動；寫入金鑰還能建立、啟用及暫停行銷活動。任何金鑰都無法直接傳送訊息或刪除任何內容。只有管理員和擁有者可以管理金鑰。",
   "Allow publishing posts to Instagram": "允許發布 Instagram 貼文",
-  "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "要建立可發布 Instagram 貼文並建立行銷活動、有效期 {days} 天的工作區金鑰嗎？任何持有此金鑰的人都能在你的 Instagram 公開發文。"
+  "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "要建立可發布 Instagram 貼文並建立行銷活動、有效期 {days} 天的工作區金鑰嗎？任何持有此金鑰的人都能在你的 Instagram 公開發文。",
+  "my Instagram Lives (DMs only go out while the live is on air)": "我的 Instagram 直播（私訊只會在直播進行中送出）",
+  "Live": "直播"
 }
