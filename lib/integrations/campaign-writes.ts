@@ -89,6 +89,7 @@ export async function createCampaignFromKey(context: ServiceContext, args: unkno
     postId: automation.postId,
     matchAnyPost: automation.matchAnyPost,
     pendingNextReel: automation.pendingNextReel,
+    matchLive: automation.matchLive,
     keywords: automation.keywords,
     trackedLinks: automation.trackedLinks.map((link) => link.destinationUrl),
   };

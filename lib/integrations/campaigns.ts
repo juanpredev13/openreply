@@ -5,7 +5,7 @@ import { requireScope, type ServiceContext } from "./auth";
 
 const summarySelect = {
   id: true, name: true, goal: true, instagramAccountId: true, isActive: true,
-  postId: true, postUrl: true, pendingNextReel: true, matchAnyPost: true,
+  postId: true, postUrl: true, pendingNextReel: true, matchAnyPost: true, matchLive: true,
   keywords: true, matchAnyWord: true, dmMessage: true, createdAt: true, updatedAt: true,
 } as const;
 
