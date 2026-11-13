@@ -206,7 +206,11 @@ async function readGraph<T>(url: URL): Promise<T> {
  */
 export async function exchangeUnifiedCode(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  // Instagram accounts already connected to other workspaces. When the login
+  // shares several Pages (an agency admin managing clients), prefer one whose
+  // Instagram account is not taken yet instead of the first in the list.
+  skipInstagramIds: ReadonlySet<string> = new Set()
 ): Promise<UnifiedConnection> {
   const base = `https://graph.facebook.com/${getMetaGraphApiVersion()}`;
   const appId = requireEnv("META_APP_ID");
@@ -251,21 +255,27 @@ export async function exchangeUnifiedCode(
     const page = await readPageById(base, pageId, long.access_token);
     if (page) list.push(page);
   }
+  let taken: UnifiedConnection | null = null;
   for (const candidate of list) {
     if (!candidate.access_token) continue;
     const ig =
       candidate.instagram_business_account ??
       (await readLinkedInstagram(base, candidate.id, candidate.access_token));
     if (ig?.id) {
-      return {
+      const connection = {
         accessToken: candidate.access_token,
         instagramId: ig.id,
         username: ig.username ?? "",
         name: ig.name,
         pageId: candidate.id,
       };
+      if (!skipInstagramIds.has(ig.id)) return connection;
+      taken ??= connection;
     }
   }
+  // Every shared account is already connected elsewhere: return the first so
+  // the callback can report it as already connected.
+  if (taken) return taken;
 
   // Say what Meta actually returned, so a failed connect can be told apart:
   // no Page shared in the dialog vs. Pages without a linked Instagram account.

@@ -109,6 +109,29 @@ describe("Unified Login mode", () => {
     expect(second.searchParams.get("grant_type")).toBe("fb_exchange_token");
   });
 
+  it("prefers a Page whose Instagram account is not connected to another workspace", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/oauth/access_token")) return json({ access_token: "tok" });
+      if (url.pathname.endsWith("/me/accounts")) {
+        return json({
+          data: [
+            { id: "p_mine", access_token: "pt_mine", instagram_business_account: { id: "ig_juan", username: "juanpre.dev" } },
+            { id: "p_client", access_token: "pt_client", instagram_business_account: { id: "ig_truebite", username: "truebite" } },
+          ],
+        });
+      }
+      return json({ data: [] });
+    });
+    const picked = await exchangeUnifiedCode("code", "https://x.test/cb", new Set(["ig_juan"]));
+    expect(picked).toMatchObject({ instagramId: "ig_truebite", pageId: "p_client" });
+
+    // When every shared account is taken, fall back to the first one so the
+    // callback can say it is already connected.
+    const fallback = await exchangeUnifiedCode("code", "https://x.test/cb", new Set(["ig_juan", "ig_truebite"]));
+    expect(fallback).toMatchObject({ instagramId: "ig_juan" });
+  });
+
   it("fails clearly when no Page has an Instagram account", async () => {
     fetchMock
       .mockResolvedValueOnce(json({ access_token: "short" }))

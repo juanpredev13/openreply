@@ -49,15 +49,42 @@ export async function acceptPendingInvitationsForUser(
   }
 }
 
+/** Cookie that remembers which of the user's workspaces (clients) is active. */
+export const ACTIVE_WORKSPACE_COOKIE = "openreply_workspace";
+
+async function preferredWorkspaceId(): Promise<string | undefined> {
+  try {
+    const { cookies } = await import("next/headers");
+    return (await cookies()).get(ACTIVE_WORKSPACE_COOKIE)?.value || undefined;
+  } catch {
+    // Outside a request (worker, scripts): no cookie, use the default workspace.
+    return undefined;
+  }
+}
+
+/**
+ * The workspace the user is acting in: the one chosen in the Clients section
+ * when the user is still a member of it, otherwise their oldest membership.
+ * The cookie only selects among the user's own memberships; it never grants
+ * access by itself.
+ */
 export async function getWorkspaceMembership(userId: string): Promise<{
   workspace: Workspace;
   role: WorkspaceRole;
 } | null> {
-  const membership = await prisma.workspaceMember.findFirst({
-    where: { userId },
-    include: { workspace: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const preferred = await preferredWorkspaceId();
+  const membership =
+    (preferred
+      ? await prisma.workspaceMember.findFirst({
+          where: { userId, workspaceId: preferred },
+          include: { workspace: true },
+        })
+      : null) ??
+    (await prisma.workspaceMember.findFirst({
+      where: { userId },
+      include: { workspace: true },
+      orderBy: { createdAt: "asc" },
+    }));
 
   if (!membership) return null;
 

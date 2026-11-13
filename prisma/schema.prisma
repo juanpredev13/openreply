@@ -87,6 +87,7 @@ model Workspace {
   operationalEvents OperationalEvent[]
   serviceKeys       ServiceKey[]
   assistantConfig   AssistantConfig?
+  clientProfile     ClientProfile?
   assistantThreads  AssistantThread[]
 
   @@index([ownerId])
@@ -481,4 +482,19 @@ model AssistantThread {
 
   @@unique([instagramAccountId, userId])
   @@index([workspaceId, paused])
+}
+
+// Business details for a workspace run as a client (agency use).
+model ClientProfile {
+  id               String   @id @default(cuid())
+  workspaceId      String   @unique
+  instagramHandle  String?
+  whatsappNumber   String?
+  // Link to the client's WhatsApp agent (TICO ARM instance or panel).
+  whatsappAgentUrl String?
+  notes            String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

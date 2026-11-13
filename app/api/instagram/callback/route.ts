@@ -50,9 +50,18 @@ async function connectWithInstagramLogin(
 // account is stored with no expiry and the refresh cron skips it.
 async function connectWithUnifiedLogin(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  workspaceId: string
 ): Promise<ConnectedAccount> {
-  const unified = await exchangeUnifiedCode(code, redirectUri);
+  const elsewhere = await prisma.instagramAccount.findMany({
+    where: { workspaceId: { not: workspaceId } },
+    select: { instagramId: true },
+  });
+  const unified = await exchangeUnifiedCode(
+    code,
+    redirectUri,
+    new Set(elsewhere.map((account) => account.instagramId))
+  );
   let { username, name } = unified;
   if (!username) {
     const info = await getUserInfo(unified.accessToken);
@@ -117,7 +126,7 @@ async function handleCallback(request: NextRequest): Promise<NextResponse> {
     const redirectUri = `${baseUrl}/api/instagram/callback`;
     const { accessToken, instagramId, username, name, tokenExpiresAt } =
       isUnifiedLogin()
-        ? await connectWithUnifiedLogin(code, redirectUri)
+        ? await connectWithUnifiedLogin(code, redirectUri, state.workspaceId)
         : await connectWithInstagramLogin(code, redirectUri);
     const connection = await canConnectInstagramAccount({
       workspaceId: state.workspaceId,
