@@ -45,6 +45,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
 }));
 
 import { processAssistantJob, whatsappLinkWithMessage } from "../lib/assistant/process";
+import { cleanAssistantText } from "../lib/assistant/format";
 import { generateAssistantReply, llmSettings, normalizeHistory } from "../lib/assistant/reply";
 import { pollAssistantInbox } from "../lib/polling/assistant-inbox";
 
@@ -184,6 +185,13 @@ describe("processAssistantJob", () => {
 
     expect(h.sent).toHaveLength(0);
     expect(h.parse).not.toHaveBeenCalled();
+  });
+});
+
+describe("assistant text clean-up", () => {
+  it("keeps at most one emoji and plain numbers", () => {
+    expect(cleanAssistantText("¡Hola! 😊 Con gusto 🙌\n1️⃣ Cantidad\n2️⃣ Zona 🚚💬")).toBe("¡Hola! 😊 Con gusto\n1. Cantidad\n2. Zona");
+    expect(cleanAssistantText("El **bowl** cuesta ₡5 900")).toBe("El bowl cuesta ₡5 900");
   });
 });
 

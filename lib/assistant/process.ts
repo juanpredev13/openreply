@@ -13,6 +13,7 @@ import {
   type InstagramMessage,
 } from "@/lib/meta/client";
 import { generateAssistantReply, type HistoryMessage } from "./reply";
+import { cleanAssistantText } from "./format";
 import type { ProcessAssistantJob } from "@/lib/queue/client";
 
 /**
@@ -109,7 +110,7 @@ export async function processAssistantJob(job: ProcessAssistantJob, now = Date.n
   const counters = { lastReplyAt: new Date(now), replyCount: withinHour ? { increment: 1 } : 1 };
 
   if (decision.handoff) {
-    const text = [decision.reply, config.handoffMessage].map((t) => t.trim()).filter(Boolean).join("\n\n")
+    const text = [cleanAssistantText(decision.reply), config.handoffMessage].map((t) => t.trim()).filter(Boolean).join("\n\n")
       || "Te paso con una persona del equipo para ayudarte.";
     if (config.whatsappUrl) {
       await sendDirectMessageWithLinkButton(token, account.instagramId, job.userId, text, [
@@ -128,7 +129,7 @@ export async function processAssistantJob(job: ProcessAssistantJob, now = Date.n
     return "handoff";
   }
 
-  await sendDirectMessage(token, account.instagramId, job.userId, decision.reply.slice(0, 1000));
+  await sendDirectMessage(token, account.instagramId, job.userId, cleanAssistantText(decision.reply).slice(0, 1000));
   await prisma.assistantThread.update({ where: { id: thread.id }, data: counters });
   return "replied";
 }
