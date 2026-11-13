@@ -20,6 +20,7 @@ export default function AssistantPage() {
   const [config, setConfig] = useState<Config>({ enabled: false, businessInfo: "", handoffMessage: "", whatsappUrl: "" });
   const [threads, setThreads] = useState<PausedThread[]>([]);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(true);
+  const [model, setModel] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,6 +31,7 @@ export default function AssistantPage() {
     setConfig({ ...data.config, whatsappUrl: data.config.whatsappUrl ?? "" });
     setThreads(data.pausedThreads);
     setApiKeyConfigured(data.apiKeyConfigured);
+    setModel(data.model ?? "");
   }
 
   useEffect(() => { void Promise.resolve().then(load).catch((e) => setNotice(e.message)); }, []);
@@ -66,7 +68,8 @@ export default function AssistantPage() {
   return <div className="mx-auto max-w-4xl space-y-6 p-6">
     <h1 className="text-2xl font-semibold">{t("AI assistant")}</h1>
     <p className="text-muted">{t("Answers Instagram DMs with the information you write below. When someone wants to buy, pay or talk to a person, it sends them to WhatsApp and stops answering that conversation.")}</p>
-    {!apiKeyConfigured && <p role="alert" className="rounded border border-warning p-3 text-warning">{t("ANTHROPIC_API_KEY is not set on the server, so the assistant cannot reply yet.")}</p>}
+    {!apiKeyConfigured && <p role="alert" className="rounded border border-warning p-3 text-warning">{t("The model API key is not set on the server, so the assistant cannot reply yet.")}</p>}
+    {model && <p className="text-sm text-muted">{t("Model")}: <code>{model}</code></p>}
     {notice && <p role="status">{notice}</p>}
 
     <section className="space-y-4 rounded border border-border p-4">

@@ -45,7 +45,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
 }));
 
 import { processAssistantJob } from "../lib/assistant/process";
-import { generateAssistantReply, normalizeHistory } from "../lib/assistant/reply";
+import { generateAssistantReply, llmSettings, normalizeHistory } from "../lib/assistant/reply";
 import { pollAssistantInbox } from "../lib/polling/assistant-inbox";
 
 const NOW = Date.parse("2026-11-12T20:00:00Z");
@@ -99,6 +99,43 @@ describe("generateAssistantReply", () => {
     h.parse.mockResolvedValue({ stop_reason: "refusal", parsed_output: null });
     expect(await generateAssistantReply({ businessName: "K", businessInfo: "", history: [{ role: "user", text: "x" }] }))
       .toEqual({ reply: "", handoff: true });
+  });
+});
+
+describe("same model as the WhatsApp agent (Groq / OpenAI-compatible)", () => {
+  const env = { LLM_PROVIDER: "groq", LLM_MODEL: "openai/gpt-oss-20b", LLM_EFFORT: "low", GROQ_API_KEY: "gsk_dummy" } as unknown as NodeJS.ProcessEnv;
+  const reply = (content: string | null, status = 200) =>
+    vi.fn(async () => new Response(JSON.stringify(status === 200 ? { choices: [{ message: { content } }] } : { error: { message: "bad" } }), { status }));
+
+  it("calls Groq chat completions with the configured model and parses the JSON decision", async () => {
+    const fetchImpl = reply(JSON.stringify({ reply: "Cuesta ₡12 500.", handoff: false }));
+    const decision = await generateAssistantReply({ businessName: "K", businessInfo: "Crema: ₡12 500", history: [{ role: "user", text: "precio?" }], env, fetchImpl });
+    expect(decision).toEqual({ reply: "Cuesta ₡12 500.", handoff: false });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer gsk_dummy");
+    const body = JSON.parse(init.body as string);
+    expect(body).toMatchObject({ model: "openai/gpt-oss-20b", reasoning_effort: "low", response_format: { type: "json_object" } });
+    expect(body.messages[0].content).toContain("Crema: ₡12 500");
+    expect(body.messages.at(-1)).toEqual({ role: "user", content: "precio?" });
+    expect(h.parse).not.toHaveBeenCalled();
+  });
+
+  it("hands off when the model returns something that is not the expected JSON", async () => {
+    for (const content of ["no es json", JSON.stringify({ reply: 3 }), null]) {
+      expect(await generateAssistantReply({ businessName: "K", businessInfo: "", history: [{ role: "user", text: "x" }], env, fetchImpl: reply(content) }))
+        .toEqual({ reply: "", handoff: true });
+    }
+  });
+
+  it("surfaces provider errors so the job retries", async () => {
+    await expect(generateAssistantReply({ businessName: "K", businessInfo: "", history: [{ role: "user", text: "x" }], env, fetchImpl: reply(null, 429) }))
+      .rejects.toThrow(/LLM HTTP 429/);
+  });
+
+  it("reads the same variables as TICO ARM", () => {
+    expect(llmSettings(env)).toMatchObject({ provider: "groq", model: "openai/gpt-oss-20b", baseUrl: "https://api.groq.com/openai/v1" });
+    expect(llmSettings({} as unknown as NodeJS.ProcessEnv)).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5" });
   });
 });
 

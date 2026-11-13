@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { canManageWorkspace, getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { apiError, ApiError, checkOrigin, readJson } from "@/lib/integrations/http";
+import { llmConfigured, llmSettings } from "@/lib/assistant/reply";
 
 const configSchema = z
   .object({
@@ -40,7 +41,8 @@ export async function GET() {
       {
         config: config ?? { enabled: false, businessInfo: "", handoffMessage: "", whatsappUrl: "" },
         pausedThreads,
-        apiKeyConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+        apiKeyConfigured: llmConfigured(),
+        model: `${llmSettings().provider}: ${llmSettings().model}`,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

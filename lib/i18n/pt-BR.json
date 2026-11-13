@@ -478,7 +478,6 @@
   "Live": "Ao vivo",
   "AI assistant": "Assistente IA",
   "Answers Instagram DMs with the information you write below. When someone wants to buy, pay or talk to a person, it sends them to WhatsApp and stops answering that conversation.": "Responde DMs do Instagram com as informações que você escreve abaixo. Quando alguém quer comprar, pagar ou falar com uma pessoa, envia para o WhatsApp e para de responder essa conversa.",
-  "ANTHROPIC_API_KEY is not set on the server, so the assistant cannot reply yet.": "ANTHROPIC_API_KEY não está configurada no servidor; o assistente ainda não pode responder.",
   "Answer DMs automatically": "Responder DMs automaticamente",
   "Business information": "Informações do negócio",
   "Products, prices, shipping, payment, hours and returns. The assistant never answers beyond this.": "Produtos, preços, envio, pagamento, horários e devoluções. O assistente nunca responde além disso.",
@@ -491,5 +490,7 @@
   "sent to WhatsApp": "enviada ao WhatsApp",
   "paused": "pausada",
   "Saved.": "Salvo.",
-  "Save": "Salvar"
+  "Save": "Salvar",
+  "The model API key is not set on the server, so the assistant cannot reply yet.": "A chave de API do modelo não está configurada no servidor; o assistente ainda não pode responder.",
+  "Model": "Modelo"
 }
