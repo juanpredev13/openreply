@@ -11,6 +11,8 @@ import {
   getDMQueue,
   getRedisConnection,
   MESSAGE_JOB_NAME,
+  ASSISTANT_JOB_NAME,
+  type ProcessAssistantJob,
   POSTBACK_JOB_NAME,
   FOLLOWUP_JOB_NAME,
   type DmQueueJob,
@@ -20,6 +22,7 @@ import {
   type ProcessFollowUpJob,
 } from "./client";
 import { prisma } from "@/lib/db/client";
+import { processAssistantJob } from "@/lib/assistant/process";
 import {
   MetaApiError,
   RateLimitError,
@@ -1564,6 +1567,13 @@ async function dispatchJob(job: Job<DmQueueJob>): Promise<void> {
   if (job.name === MESSAGE_JOB_NAME) {
     return processMessage(job as Job<ProcessMessageJob>);
   }
+  if (job.name === ASSISTANT_JOB_NAME) {
+    const outcome = await processAssistantJob((job as Job<ProcessAssistantJob>).data);
+    if (outcome === "replied" || outcome === "handoff") {
+      console.log(`[Assistant] ${outcome} for job ${job.id}`);
+    }
+    return;
+  }
   return processComment(job as Job<ProcessCommentJob>);
 }
 
@@ -1585,7 +1595,8 @@ async function recordWorkerFailure(
   error: Error
 ) {
   try {
-    const instagramAccountId = job?.data.instagramAccountId;
+    const instagramAccountId =
+      job && "instagramAccountId" in job.data ? job.data.instagramAccountId : undefined;
     const commentId =
       job && "commentId" in job.data ? job.data.commentId : null;
     const account = instagramAccountId

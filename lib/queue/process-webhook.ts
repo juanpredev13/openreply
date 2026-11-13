@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/client';
-import { getDMQueue, MESSAGE_JOB_NAME, POSTBACK_JOB_NAME } from '@/lib/queue/client';
+import { getDMQueue, MESSAGE_JOB_NAME, ASSISTANT_JOB_NAME, POSTBACK_JOB_NAME } from '@/lib/queue/client';
 import { parseCommentEvents, parseMessageEvents, parsePostbackEvents, parseReadEvents } from '@/lib/meta/webhook';
 import { Prisma, type InstagramProvider } from '@/app/generated/prisma/client';
 
@@ -118,6 +118,17 @@ export async function processInstagramWebhook({ payload: incoming, provider, wor
           jobId: `message_${event.instagramAccountId}_${Buffer.from(
             event.messageId
           ).toString("base64url")}`,
+        }
+      );
+
+      // The AI assistant runs a few seconds later, after any keyword DM
+      // campaign has had the chance to answer this message first.
+      await queue.add(
+        ASSISTANT_JOB_NAME,
+        { accountConnectionId: account.id, userId: event.senderId },
+        {
+          jobId: `assistant_${account.id}_${Buffer.from(event.messageId).toString("base64url")}`,
+          delay: 5_000,
         }
       );
 

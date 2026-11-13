@@ -475,5 +475,21 @@
   "Allow publishing posts to Instagram": "允許發布 Instagram 貼文",
   "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "要建立可發布 Instagram 貼文並建立行銷活動、有效期 {days} 天的工作區金鑰嗎？任何持有此金鑰的人都能在你的 Instagram 公開發文。",
   "my Instagram Lives (DMs only go out while the live is on air)": "我的 Instagram 直播（私訊只會在直播進行中送出）",
-  "Live": "直播"
+  "Live": "直播",
+  "AI assistant": "AI 助理",
+  "Answers Instagram DMs with the information you write below. When someone wants to buy, pay or talk to a person, it sends them to WhatsApp and stops answering that conversation.": "依照下方資訊回覆 Instagram 私訊。當有人想購買、付款或找真人時，會轉到 WhatsApp 並停止回覆該對話。",
+  "ANTHROPIC_API_KEY is not set on the server, so the assistant cannot reply yet.": "伺服器尚未設定 ANTHROPIC_API_KEY，助理暫時無法回覆。",
+  "Answer DMs automatically": "自動回覆私訊",
+  "Business information": "商家資訊",
+  "Products, prices, shipping, payment, hours and returns. The assistant never answers beyond this.": "產品、價格、運送、付款、營業時間與退貨。助理不會回答超出這些內容的問題。",
+  "WhatsApp link for handoff": "轉接用的 WhatsApp 連結",
+  "Handoff message": "轉接訊息",
+  "Escríbenos por WhatsApp y te ayudamos con tu pedido.": "請透過 WhatsApp 聯絡我們，我們會協助您的訂單。",
+  "Paused conversations": "已暫停的對話",
+  "The assistant stays silent here after a handoff. Resume it once the person has been helped.": "轉接後助理會在此保持安靜。客人處理完後再恢復。",
+  "None.": "無。",
+  "sent to WhatsApp": "已轉到 WhatsApp",
+  "paused": "已暫停",
+  "Saved.": "已儲存。",
+  "Save": "儲存"
 }

@@ -1096,3 +1096,29 @@ export async function getLiveComments(
   }
   return results.slice(0, max);
 }
+
+/**
+ * The DM conversation with one customer (by Instagram-scoped id), with its
+ * most recent messages newest first. Null when there is no conversation yet.
+ */
+export async function getConversationWithUser(
+  accessToken: string,
+  igUserId: string,
+  userId: string,
+  limit = 20
+): Promise<InstagramConversation | null> {
+  const url = new URL(`${graphBase()}/${messagingNode(igUserId)}/conversations`);
+  url.searchParams.set("platform", "instagram");
+  url.searchParams.set("user_id", userId);
+  url.searchParams.set(
+    "fields",
+    `participants,updated_time,messages.limit(${limit}){id,created_time,from,message}`
+  );
+  const data = await handleResponse<{ data?: InstagramConversation[] }>(
+    await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+  );
+  return data.data?.[0] ?? null;
+}

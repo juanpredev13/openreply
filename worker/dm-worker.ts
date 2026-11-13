@@ -3,6 +3,7 @@ import { recordWorkerHeartbeat } from "@/lib/ops/worker-health";
 import { reconcileComments } from "@/lib/polling/comment-reconciler";
 import { attachPendingNextReels } from "@/lib/automation/attach-next-reel";
 import { pollLiveComments } from "@/lib/polling/live-comments";
+import { pollAssistantInbox } from "@/lib/polling/assistant-inbox";
 import os from "node:os";
 
 const worker = createDMWorker();
@@ -66,6 +67,26 @@ async function livePoll() {
 }
 const livePollTimer = setInterval(() => void livePoll(), LIVE_POLL_INTERVAL_MS);
 
+// AI assistant: read the DM inbox of workspaces that turned it on.
+const ASSISTANT_POLL_INTERVAL_MS = Number(process.env.ASSISTANT_POLL_INTERVAL_MS ?? 20_000);
+let assistantPollRunning = false;
+async function assistantPoll() {
+  if (assistantPollRunning) return;
+  assistantPollRunning = true;
+  try {
+    const result = await pollAssistantInbox();
+    if (result.enqueued > 0 || result.errors.length > 0) {
+      console.log("[DM Worker] Assistant inbox:", result);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[DM Worker] Assistant inbox polling failed:", message);
+  } finally {
+    assistantPollRunning = false;
+  }
+}
+const assistantPollTimer = setInterval(() => void assistantPoll(), ASSISTANT_POLL_INTERVAL_MS);
+
 // Kick off one sweep shortly after boot, then on a fixed interval.
 setTimeout(() => void poll(), 10_000);
 const pollTimer = setInterval(() => void poll(), POLL_INTERVAL_MS);
@@ -75,6 +96,7 @@ async function shutdown(signal: string) {
   clearInterval(heartbeatTimer);
   clearInterval(pollTimer);
   clearInterval(livePollTimer);
+  clearInterval(assistantPollTimer);
   await worker.close();
   process.exit(0);
 }

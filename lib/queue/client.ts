@@ -79,15 +79,25 @@ export interface ProcessMessageJob {
   senderId: string;
 }
 
+/** A customer's DM that the AI assistant may answer. */
+export interface ProcessAssistantJob {
+  /** InstagramAccount row id. */
+  accountConnectionId: string;
+  /** Instagram-scoped id of the customer. */
+  userId: string;
+}
+
 export type DmQueueJob =
   | ProcessCommentJob
   | ProcessPostbackJob
   | ProcessFollowUpJob
-  | ProcessMessageJob;
+  | ProcessMessageJob
+  | ProcessAssistantJob;
 
 export const POSTBACK_JOB_NAME = "process-postback";
 export const FOLLOWUP_JOB_NAME = "process-followup";
 export const MESSAGE_JOB_NAME = "process-message";
+export const ASSISTANT_JOB_NAME = "assistant-reply";
 
 let dmQueue: Queue<DmQueueJob> | null = null;
 

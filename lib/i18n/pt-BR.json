@@ -475,5 +475,21 @@
   "Allow publishing posts to Instagram": "Permitir publicar posts no Instagram",
   "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "Criar uma chave do espaço de trabalho por {days} dias que pode publicar posts no Instagram e criar campanhas? Qualquer pessoa com esta chave pode publicar no seu Instagram.",
   "my Instagram Lives (DMs only go out while the live is on air)": "minhas lives do Instagram (as DMs só saem enquanto a live está no ar)",
-  "Live": "Ao vivo"
+  "Live": "Ao vivo",
+  "AI assistant": "Assistente IA",
+  "Answers Instagram DMs with the information you write below. When someone wants to buy, pay or talk to a person, it sends them to WhatsApp and stops answering that conversation.": "Responde DMs do Instagram com as informações que você escreve abaixo. Quando alguém quer comprar, pagar ou falar com uma pessoa, envia para o WhatsApp e para de responder essa conversa.",
+  "ANTHROPIC_API_KEY is not set on the server, so the assistant cannot reply yet.": "ANTHROPIC_API_KEY não está configurada no servidor; o assistente ainda não pode responder.",
+  "Answer DMs automatically": "Responder DMs automaticamente",
+  "Business information": "Informações do negócio",
+  "Products, prices, shipping, payment, hours and returns. The assistant never answers beyond this.": "Produtos, preços, envio, pagamento, horários e devoluções. O assistente nunca responde além disso.",
+  "WhatsApp link for handoff": "Link do WhatsApp para transferência",
+  "Handoff message": "Mensagem de transferência",
+  "Escríbenos por WhatsApp y te ayudamos con tu pedido.": "Escreva para nós no WhatsApp e ajudamos com seu pedido.",
+  "Paused conversations": "Conversas pausadas",
+  "The assistant stays silent here after a handoff. Resume it once the person has been helped.": "O assistente fica em silêncio aqui após a transferência. Retome quando a pessoa tiver sido atendida.",
+  "None.": "Nenhuma.",
+  "sent to WhatsApp": "enviada ao WhatsApp",
+  "paused": "pausada",
+  "Saved.": "Salvo.",
+  "Save": "Salvar"
 }

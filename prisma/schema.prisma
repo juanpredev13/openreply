@@ -86,6 +86,8 @@ model Workspace {
   webhookEvents     WebhookEvent[]
   operationalEvents OperationalEvent[]
   serviceKeys       ServiceKey[]
+  assistantConfig   AssistantConfig?
+  assistantThreads  AssistantThread[]
 
   @@index([ownerId])
 }
@@ -157,6 +159,7 @@ model InstagramAccount {
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   automations Automation[]
+  assistantThreads AssistantThread[]
   dmLogs      DmLog[]
   linkClicks  LinkClick[]
   followerSnapshots FollowerSnapshot[]
@@ -437,4 +440,45 @@ model ZernioConnection {
 model PostbackDelivery {
   id String @id
   createdAt DateTime @default(now())
+}
+
+// AI assistant that answers Instagram DMs for a workspace.
+model AssistantConfig {
+  id             String   @id @default(cuid())
+  workspaceId    String   @unique
+  enabled        Boolean  @default(false)
+  // What the assistant knows about the business: products, prices, hours,
+  // shipping, payment, returns. Written by the workspace admin.
+  businessInfo   String   @default("")
+  // Sent with the WhatsApp button when the conversation goes to a person.
+  handoffMessage String   @default("")
+  whatsappUrl    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// One DM conversation the assistant takes part in.
+model AssistantThread {
+  id                     String    @id @default(cuid())
+  workspaceId            String
+  instagramAccountId     String
+  // Instagram-scoped id of the customer.
+  userId                 String
+  username               String?
+  // Paused after a handoff or by an admin: the assistant stays silent.
+  paused                 Boolean   @default(false)
+  pausedReason           String?
+  lastProcessedMessageId String?
+  lastReplyAt            DateTime?
+  replyCount             Int       @default(0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([instagramAccountId, userId])
+  @@index([workspaceId, paused])
 }

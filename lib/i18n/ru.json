@@ -475,5 +475,21 @@
   "Allow publishing posts to Instagram": "Разрешить публиковать посты в Instagram",
   "Create a workspace key for {days} days that can publish Instagram posts and create campaigns? Anyone with this key can post publicly on your Instagram.": "Создать ключ рабочего пространства на {days} дн., который может публиковать посты в Instagram и создавать кампании? Любой, у кого есть этот ключ, сможет публиковать в вашем Instagram.",
   "my Instagram Lives (DMs only go out while the live is on air)": "мои эфиры в Instagram (DM отправляются только во время эфира)",
-  "Live": "Эфир"
+  "Live": "Эфир",
+  "AI assistant": "ИИ-ассистент",
+  "Answers Instagram DMs with the information you write below. When someone wants to buy, pay or talk to a person, it sends them to WhatsApp and stops answering that conversation.": "Отвечает на сообщения в Instagram по информации ниже. Когда клиент хочет купить, оплатить или поговорить с человеком, отправляет его в WhatsApp и перестаёт отвечать в этом диалоге.",
+  "ANTHROPIC_API_KEY is not set on the server, so the assistant cannot reply yet.": "На сервере не задан ANTHROPIC_API_KEY, поэтому ассистент пока не может отвечать.",
+  "Answer DMs automatically": "Автоматически отвечать на сообщения",
+  "Business information": "Информация о бизнесе",
+  "Products, prices, shipping, payment, hours and returns. The assistant never answers beyond this.": "Товары, цены, доставка, оплата, часы работы и возвраты. Ассистент не отвечает сверх этого.",
+  "WhatsApp link for handoff": "Ссылка WhatsApp для передачи",
+  "Handoff message": "Сообщение при передаче",
+  "Escríbenos por WhatsApp y te ayudamos con tu pedido.": "Напишите нам в WhatsApp, и мы поможем с заказом.",
+  "Paused conversations": "Приостановленные диалоги",
+  "The assistant stays silent here after a handoff. Resume it once the person has been helped.": "После передачи ассистент здесь молчит. Возобновите его, когда клиенту помогли.",
+  "None.": "Нет.",
+  "sent to WhatsApp": "отправлен в WhatsApp",
+  "paused": "приостановлен",
+  "Saved.": "Сохранено.",
+  "Save": "Сохранить"
 }
