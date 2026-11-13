@@ -15,6 +15,24 @@ import {
 import { generateAssistantReply, type HistoryMessage } from "./reply";
 import type { ProcessAssistantJob } from "@/lib/queue/client";
 
+/**
+ * WhatsApp link with the order summary pre-written, so the conversation on
+ * WhatsApp (a person or the TICO ARM agent) starts with what the customer
+ * wants. Only wa.me / api.whatsapp.com links get the text; others are kept.
+ */
+export function whatsappLinkWithMessage(url: string, summary: string, username?: string | null): string {
+  try {
+    const link = new URL(url);
+    if (!["wa.me", "api.whatsapp.com"].includes(link.hostname)) return url;
+    const intro = username ? `Hola, vengo de Instagram (@${username}).` : "Hola, vengo de Instagram.";
+    const text = summary.trim() ? `${intro} ${summary.trim()}` : intro;
+    link.searchParams.set("text", text.slice(0, 500));
+    return link.toString();
+  } catch {
+    return url;
+  }
+}
+
 // Meta only allows replies within 24 h of the customer's last message.
 const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Never answer a backlog: only messages from the last few minutes.
@@ -95,7 +113,10 @@ export async function processAssistantJob(job: ProcessAssistantJob, now = Date.n
       || "Te paso con una persona del equipo para ayudarte.";
     if (config.whatsappUrl) {
       await sendDirectMessageWithLinkButton(token, account.instagramId, job.userId, text, [
-        { title: "Escribir por WhatsApp", url: config.whatsappUrl },
+        {
+          title: "Escribir por WhatsApp",
+          url: whatsappLinkWithMessage(config.whatsappUrl, decision.whatsappMessage, latest.from?.username ?? thread.username),
+        },
       ]);
     } else {
       await sendDirectMessage(token, account.instagramId, job.userId, text);

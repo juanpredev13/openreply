@@ -44,7 +44,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
   default: class { beta = { messages: { parse: h.parse } }; },
 }));
 
-import { processAssistantJob } from "../lib/assistant/process";
+import { processAssistantJob, whatsappLinkWithMessage } from "../lib/assistant/process";
 import { generateAssistantReply, llmSettings, normalizeHistory } from "../lib/assistant/reply";
 import { pollAssistantInbox } from "../lib/polling/assistant-inbox";
 
@@ -98,7 +98,7 @@ describe("generateAssistantReply", () => {
   it("hands off instead of improvising when the model declines", async () => {
     h.parse.mockResolvedValue({ stop_reason: "refusal", parsed_output: null });
     expect(await generateAssistantReply({ businessName: "K", businessInfo: "", history: [{ role: "user", text: "x" }] }))
-      .toEqual({ reply: "", handoff: true });
+      .toEqual({ reply: "", handoff: true, whatsappMessage: "" });
   });
 });
 
@@ -110,7 +110,7 @@ describe("same model as the WhatsApp agent (Groq / OpenAI-compatible)", () => {
   it("calls Groq chat completions with the configured model and parses the JSON decision", async () => {
     const fetchImpl = reply(JSON.stringify({ reply: "Cuesta ₡12 500.", handoff: false }));
     const decision = await generateAssistantReply({ businessName: "K", businessInfo: "Crema: ₡12 500", history: [{ role: "user", text: "precio?" }], env, fetchImpl });
-    expect(decision).toEqual({ reply: "Cuesta ₡12 500.", handoff: false });
+    expect(decision).toEqual({ reply: "Cuesta ₡12 500.", handoff: false, whatsappMessage: "" });
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer gsk_dummy");
@@ -124,7 +124,7 @@ describe("same model as the WhatsApp agent (Groq / OpenAI-compatible)", () => {
   it("hands off when the model returns something that is not the expected JSON", async () => {
     for (const content of ["no es json", JSON.stringify({ reply: 3 }), null]) {
       expect(await generateAssistantReply({ businessName: "K", businessInfo: "", history: [{ role: "user", text: "x" }], env, fetchImpl: reply(content) }))
-        .toEqual({ reply: "", handoff: true });
+        .toEqual({ reply: "", handoff: true, whatsappMessage: "" });
     }
   });
 
@@ -150,9 +150,12 @@ describe("processAssistantJob", () => {
   });
 
   it("hands off with the WhatsApp button and pauses the conversation", async () => {
-    h.parse.mockResolvedValue({ stop_reason: "end_turn", parsed_output: { reply: "Te paso con el equipo.", handoff: true } });
+    h.parse.mockResolvedValue({ stop_reason: "end_turn", parsed_output: { reply: "Te paso con el equipo.", handoff: true, whatsappMessage: "Quiero 2 cremas de caracol, envío a Heredia." } });
     expect(await processAssistantJob(job, NOW)).toBe("handoff");
-    expect(h.sent[0]).toMatchObject({ kind: "button", text: "Te paso con el equipo.\n\nEscríbenos por WhatsApp.", buttons: [{ title: "Escribir por WhatsApp", url: "https://wa.me/50688888888" }] });
+    expect(h.sent[0]).toMatchObject({ kind: "button", text: "Te paso con el equipo.\n\nEscríbenos por WhatsApp." });
+    const url = new URL((h.sent[0].buttons as Array<{ url: string }>)[0].url);
+    expect(url.origin + url.pathname).toBe("https://wa.me/50688888888");
+    expect(url.searchParams.get("text")).toBe("Hola, vengo de Instagram (@ana). Quiero 2 cremas de caracol, envío a Heredia.");
     expect(h.threadUpdates[0]).toMatchObject({ paused: true, pausedReason: "handoff" });
   });
 
@@ -181,6 +184,14 @@ describe("processAssistantJob", () => {
 
     expect(h.sent).toHaveLength(0);
     expect(h.parse).not.toHaveBeenCalled();
+  });
+});
+
+describe("WhatsApp prefill", () => {
+  it("adds the summary only to WhatsApp links", () => {
+    expect(new URL(whatsappLinkWithMessage("https://wa.me/506888", "Quiero 1", "ana")).searchParams.get("text")).toBe("Hola, vengo de Instagram (@ana). Quiero 1");
+    expect(new URL(whatsappLinkWithMessage("https://wa.me/506888", "", null)).searchParams.get("text")).toBe("Hola, vengo de Instagram.");
+    expect(whatsappLinkWithMessage("https://tienda.example.test/contacto", "Quiero 1", "ana")).toBe("https://tienda.example.test/contacto");
   });
 });
 
